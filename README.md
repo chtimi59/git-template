@@ -4,7 +4,7 @@ Use git as scaffold manager
 # Setup
 
 ```sh
-git config -global -e
+git config --global -e
 ```
 ```
 [include]
