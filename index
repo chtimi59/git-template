@@ -1,0 +1,77 @@
+#!/bin/sh
+
+# enable debug mode
+if [ "$DEBUG" = "yes" ]; then
+	set -x
+fi
+
+# Setup the GITTEMPLATE_DIR for different operating systems.
+# This is mostly to make sure that we get the correct directory when the
+# git-flow file is a symbolic link
+case $(uname -s) in
+Linux)
+	export GITTEMPLATE_DIR=$(dirname "$(readlink -e "$0")")
+	export CURRENT_PATH=$(pwd)
+	;;
+FreeBSD|OpenBSD|NetBSD)
+	export FLAGS_GETOPT_CMD='/usr/local/bin/getopt'
+	export GITTEMPLATE_DIR=$(dirname "$(realpath "$0")")
+	export CURRENT_PATH=$(pwd)
+	;;
+Darwin)
+	PRG="$0"
+	while [ -h "$PRG" ]; do
+		link=$(readlink "$0")
+		if expr "$link" : '/.*' > /dev/null; then
+			PRG="$link"
+		else
+			PRG="$(dirname "$PRG")/$link"
+		fi
+	done
+	export GITTEMPLATE_DIR=$(dirname "$PRG")
+	export CURRENT_PATH=$(pwd)
+	;;
+*MINGW*)
+	export GITTEMPLATE_DIR=$(dirname "$(echo "$0" | sed -e 's,\\,/,g')")
+	pwd () {
+		builtin pwd -W
+	}
+	export CURRENT_PATH=$(pwd)
+	;;
+*)
+	# The sed expression here replaces all backslashes by forward slashes.
+	# This helps our Windows users, while not bothering our Unix users.)
+	export GITTEMPLATE_DIR=$(dirname "$(echo "$0" | sed -e 's,\\,/,g')")
+	export CURRENT_PATH=$(pwd)
+	;;
+esac
+
+export DEFINE_TEMPLATE_PATH=".template"
+
+usage() {
+	echo "usage: git template <subcommand>"
+	echo
+	echo "Available subcommands are:"
+	echo "   add      add a template"
+	echo "   remove   remove template"
+	echo
+	echo "Try 'git template <subcommand> help' for details."
+}
+
+main() {
+	if [ $# -lt 1 ]; then
+		usage
+		exit 1
+	fi
+
+	SUBCOMMAND="$1"; shift
+	if [ ! -e "$GITTEMPLATE_DIR/commands/$SUBCOMMAND" ]; then
+		usage
+		exit 1
+	fi
+
+	. "$GITTEMPLATE_DIR//commands/$SUBCOMMAND" $@
+}
+main "$@"
+
+

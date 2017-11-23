@@ -1,0 +1,33 @@
+#!/bin/sh
+
+# enable debug mode
+if [ "$DEBUG" = "yes" ]; then
+	set -x
+fi
+
+usage() {
+	echo "Remove template repository"
+}
+
+main() {
+	SUBCOMMAND="$1"; shift
+	if [ "${SUBCOMMAND}" = "help" ]; then
+		usage
+		exit 1
+	fi
+
+	git-status 1>/dev/null
+	if [ ! $? -eq 0 ]; then
+		exit 1
+	fi
+
+	git config -f .git/config --remove-section submodule.$DEFINE_TEMPLATE_PATH >/dev/null 2>&1 
+	rm -rf .git/modules/$DEFINE_TEMPLATE_PATH >/dev/null 2>&1 
+	git config -f .gitmodules --remove-section submodule.$DEFINE_TEMPLATE_PATH >/dev/null 2>&1 
+	[ ! -s .gitmodules ] && rm -f .gitmodules >/dev/null 2>&1 
+	git rm -f "$DEFINE_TEMPLATE_PATH" >/dev/null 2>&1 
+	rm -rf "$DEFINE_TEMPLATE_PATH" >/dev/null 2>&1
+	git ls-files --error-unmatch .gitmodules >/dev/null 2>&1 && git rm --cached .gitmodules
+	git ls-files --error-unmatch $DEFINE_TEMPLATE_PATH >/dev/null 2>&1 && git rm --cached $DEFINE_TEMPLATE_PATH
+}
+main "$@"

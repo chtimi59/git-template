@@ -1,0 +1,68 @@
+#!/bin/sh
+
+# enable debug mode
+if [ "$DEBUG" = "yes" ]; then
+	set -x
+fi
+
+usage() {
+	echo "Add a template repository"
+	echo "Add a template repository"
+}
+usage() {
+	echo "usage: git template add [-b <branch>] <repository>"
+	echo "usage: git template add help"
+}
+
+main() {
+	if [ $# -lt 1 ]; then
+		usage
+		exit 1
+	fi
+
+	SUBCOMMAND="$1";
+	if [ "${SUBCOMMAND}" = "help" ]; then
+		usage
+		exit 1
+	fi
+	
+	git-status 1>/dev/null
+	if [ ! $? -eq 0 ]; then
+		exit 1
+	fi
+
+	if [ -d "$DEFINE_TEMPLATE_PATH" ]; then
+		echo "Template already defined ($DEFINE_TEMPLATE_PATH)"
+		exit 1
+	fi
+
+	OPTIND=1
+	repository=
+	branch_option="-b master"
+	while getopts "b:" opt; do
+		case "$opt" in
+			b) branch_option="-b $OPTARG"
+			;;
+		esac
+	done
+	shift $((OPTIND-1))
+	[ "$1" = "--" ] && shift
+	repository="$1"
+
+	git submodule add $branch_option $repository $DEFINE_TEMPLATE_PATH
+	if [ ! $? -eq 0 ]; then
+		echo "failed to get '$repository' ($branch_option)"
+		git config -f .git/config --remove-section submodule.$DEFINE_TEMPLATE_PATH >/dev/null 2>&1 
+		rm -rf .git/modules/$DEFINE_TEMPLATE_PATH >/dev/null 2>&1 
+		git config -f .gitmodules --remove-section submodule.$DEFINE_TEMPLATE_PATH >/dev/null 2>&1 
+		[ ! -s .gitmodules ] && rm -f .gitmodules >/dev/null 2>&1 
+		git rm -f "$DEFINE_TEMPLATE_PATH" >/dev/null 2>&1 
+		rm -rf "$DEFINE_TEMPLATE_PATH" >/dev/null 2>&1
+		git ls-files --error-unmatch .gitmodules >/dev/null 2>&1 && git rm --cached .gitmodules
+		git ls-files --error-unmatch $DEFINE_TEMPLATE_PATH >/dev/null 2>&1 && git rm --cached $DEFINE_TEMPLATE_PATH
+		exit 1
+	fi
+
+	echo "done"
+}
+main "$@"

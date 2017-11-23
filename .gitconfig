@@ -1,0 +1,4 @@
+# define entry point as git alias
+# hence 'git template 1 2 3' starts 'index 1 2 3'
+[alias]
+    template = "!bash $(dirname \"$(git config --global --get-all include.path git-template)\")/index \"$@\""
