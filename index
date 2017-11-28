@@ -70,7 +70,8 @@ main() {
 		exit 1
 	fi
 
-	. "$GITTEMPLATE_DIR//commands/$SUBCOMMAND" $@
+	. "$GITTEMPLATE_DIR/common/index"
+	. "$GITTEMPLATE_DIR/commands/$SUBCOMMAND" $@
 }
 main "$@"
 

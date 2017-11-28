@@ -1,0 +1,83 @@
+#!/bin/sh
+
+checkBasic() {
+	# do a basic git command
+	git-status 1>/dev/null
+	# return error code, then exit !
+	if [ ! $? -eq 0 ]; then
+		exit 1
+	fi
+}
+
+checkAlreadyExist() {
+	# multiple template is not supported
+	if [ -d "$DEFINE_TEMPLATE_PATH" ]; then
+		echo "Template already defined ($DEFINE_TEMPLATE_PATH)"
+		exit 1
+	fi
+}
+
+delete() {
+	# remove submodule in .git/config
+	git config -f .git/config --remove-section submodule.$DEFINE_TEMPLATE_PATH >/dev/null 2>&1 
+	# remove submodule in .git/modules
+	rm -rf .git/modules/$DEFINE_TEMPLATE_PATH >/dev/null 2>&1 
+	# remove submodule in .gitmodules
+	git config -f .gitmodules --remove-section submodule.$DEFINE_TEMPLATE_PATH >/dev/null 2>&1 
+	# if .gitmodules is empty delete it
+	[ ! -s .gitmodules ] && rm -f .gitmodules >/dev/null 2>&1 
+	# remove submodule folder
+	git rm -f "$DEFINE_TEMPLATE_PATH" >/dev/null 2>&1 
+	rm -rf "$DEFINE_TEMPLATE_PATH" >/dev/null 2>&1
+	# clean up cached files/folders
+	# .gitmodules
+	git ls-files --error-unmatch .gitmodules >/dev/null 2>&1 && git rm --cached .gitmodules
+	# submodule folder
+	git ls-files --error-unmatch $DEFINE_TEMPLATE_PATH >/dev/null 2>&1 && git rm --cached $DEFINE_TEMPLATE_PATH
+}
+
+dbgShowVars() {
+	echo 
+	echo -- vars --
+	echo CURRENT_PATH: \"$CURRENT_PATH\" # ex: C:/dev/test/folder4
+	echo GITTEMPLATE_DIR: \"$GITTEMPLATE_DIR\" # ex: C:/dev/git-template
+	echo DEFINE_TEMPLATE_PATH: \"$DEFINE_TEMPLATE_PATH\" # ex .template
+	echo ARGS: \"$@\" # ex: help remove help
+	echo SUBCOMMAND: \"$1\" # ex: remove
+	echo --
+}
+
+#dbgShowVars "$@"
+
+
+yesNo() {
+	o_xxxx=y                       # In batch mode => Default is Yes
+	[[ -t 0 ]] &&                  # If tty => prompt the question
+	read -t 5 -n 1 -p $'\e[1;32m
+	Do xxxx? (Y/n)\e[0m ' do_xxxx  # Store the answer in $do_xxxx
+	
+	if [[ $do_xxxx =~ ^(y|Y|)$ ]]  # Do if 'y', 'Y' or empty
+	then
+		echo "do!"
+	fi
+
+	#Explanations
+	#[[ -t 0 ]] && read ... => Call read only in TTY
+	#read -t 5 => Timeout 5 seconds
+	#read -n 1 => Wait for one character
+	#$'\e[1;32m ... \e[0m ' => Print in green
+	#(readable on both white/black backgrounds)
+	#[[ $do_xxxx =~ ^(y|Y|)$ ]] => bash regex
+}
+
+GRAY=$'\e[1;30m'
+RED=$'\e[1;31m'
+GREEN=$'\e[1;32m'
+YELLOW=$'\e[1;33m'
+BLUE=$'\e[1;34m'
+PINK=$'\e[1;35m'
+CYAN=$'\e[1;36m'
+WHITE=$'\e[1;37m'
+ERROR=$'\e[1;37m\e[41m'
+SUCCESS=$'\e[1;37m\e[42m'
+CLEAR=$'\e[0m'

@@ -1,0 +1,32 @@
+#!/bin/sh
+
+usage() {
+	echo "usage: git template init"
+	echo ""
+	echo "initialize a new template"
+	echo ""
+	echo "    -h, --help            help"
+	exit 1
+}
+
+main() {
+	# sanity checks
+	re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
+	checkBasic
+	checkAlreadyExist
+
+	# prepare prompt values
+	baseDir=`git rev-parse --show-toplevel` # git project top folder
+	templateName="$(basename $baseDir).template" # git project top folder Name
+	templatePath=`readlink -f "$baseDir/.."` # pre-template path
+
+	# Get Template Name
+	res=$templatePath
+	[[ -t 0 ]] && read -p "$GREEN  Template Name $GRAY('$res')$CLEAR " res
+	re='^\s*$'; [[ ! "$res" =~ $re ]] && templatePath=$res
+
+	echo $templatePath
+
+}
+
+main "$@"
