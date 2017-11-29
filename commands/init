@@ -3,7 +3,7 @@
 usage() {
 	echo "usage: git template init"
 	echo ""
-	echo "initialize a new template"
+	echo "initialize a new template with a local bare repo"
 	echo ""
 	echo "    -h, --help            help"
 	exit 1
@@ -16,15 +16,30 @@ main() {
 	checkAlreadyExist
 
 	# prepare prompt values
-	baseDir=`git rev-parse --show-toplevel` # git project top folder
-	templateName="$(basename $baseDir).template" # git project top folder Name
-	templatePath=`readlink -f "$baseDir/.."` # pre-template path
-
+	baseDir=`git rev-parse --show-toplevel | xargs readlink -f` # git project top folder
+	echo $baseDir
+	templateName="$(basename $baseDir).template.bare" # git project top folder Name
+	templatePath=`readlink -f "$baseDir/.."`/$templateName # pre-template path
 	# Get Template Name
-	res=$templatePath
-	[[ -t 0 ]] && read -p "$GREEN  Template Name $GRAY('$res')$CLEAR " res
-	re='^\s*$'; [[ ! "$res" =~ $re ]] && templatePath=$res
-
+	err=true
+	while $err; do
+		res=$templatePath
+		[[ -t 0 ]] && read -p "$GREEN""bare repo path ""$GRAY('$res')$CLEAR ?" res
+		re='^\s*$'; [[ "$res" =~ $re ]] && res=$templatePath
+		if [ -e "$res" ]; then
+			echo \'$res\' already exist
+		elif [[ `readlink -f "$res"` == $baseDir\/* ]]; then
+			echo bare repo couldn\'t be inside \'$baseDir\'
+		else
+			echo `readlink -f "$res"`
+			echo "$baseDir\/"
+			templatePath=`readlink -f "$res"`;
+			mkdir $templatePath
+			if [ $? -eq 0 ]; then
+				err=false;
+			fi
+		fi
+	done
 	echo $templatePath
 
 }
