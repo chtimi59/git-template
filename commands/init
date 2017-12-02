@@ -11,36 +11,90 @@ usage() {
 
 main() {
 	# sanity checks
-	re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
+	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
 	checkBasic
 	checkAlreadyExist
 
-	# prepare prompt values
-	baseDir=`git rev-parse --show-toplevel | xargs readlink -f` # git project top folder
-	echo $baseDir
-	templateName="$(basename $baseDir).template.bare" # git project top folder Name
-	templatePath=`readlink -f "$baseDir/.."`/$templateName # pre-template path
-	# Get Template Name
-	err=true
+	echo "$GREEN""o Create a git bare repository""$CLEAR"
+
+	# prepare default prompt values
+	local baseDir=`git rev-parse --show-toplevel | pathresolve` # git project top folder
+	local templateName="$(basename $baseDir).template.git" # git project top folder Name
+	local templatePath=`pathresolve "$baseDir/../$templateName"` # pre-template path
+
+	# create templatePath folder
+	local err=true
 	while $err; do
-		res=$templatePath
-		[[ -t 0 ]] && read -p "$GREEN""bare repo path ""$GRAY('$res')$CLEAR ?" res
-		re='^\s*$'; [[ "$res" =~ $re ]] && res=$templatePath
-		if [ -e "$res" ]; then
-			echo \'$res\' already exist
-		elif [[ `readlink -f "$res"` == $baseDir\/* ]]; then
-			echo bare repo couldn\'t be inside \'$baseDir\'
+		local res=$templatePath
+		[[ -t 0 ]] && read -rep "  $GREEN""choose path: ""$GRAY(default: '$res') $CLEAR" res
+		local re='^\s*$'; [[ "$res" =~ $re ]] && res=$templatePath
+		local res=`pathresolve $res`
+		if false; then
+			echo dbg
+		#elif [ -e "$res" ]; then
+		#	echo "  path already exist"
+		elif [[ $res == $baseDir\/* ]]; then
+			echo "  Couldn't create a repository inside another repository, consider '../' prefix"
 		else
-			echo `readlink -f "$res"`
-			echo "$baseDir\/"
-			templatePath=`readlink -f "$res"`;
-			mkdir $templatePath
+			templatePath=$res;
+			echo "  path: $templatePath"
+			echo -n "  $GREEN""continue? ""$CLEAR"
+			yesNoPrompt
+			if [ $? != 0 ]; then
+				echo "  * canceled *"
+				exit 0
+			fi
+			mkdir -p $templatePath
 			if [ $? -eq 0 ]; then
 				err=false;
 			fi
 		fi
 	done
-	echo $templatePath
+
+	# git bare init
+	pushd $templatePath  >/dev/null 2>&1 
+	git init --bare
+	popd  >/dev/null 2>&1 
+	if [ $? != 0 ]; then
+		rm -r $templatePath
+		exit 1
+	fi
+	
+	# add submodule
+	echo "$GREEN""o add template to project""$CLEAR"
+	pushd $baseDir >/dev/null 2>&1 
+	git submodule add $templatePath $DEFINE_TEMPLATE_PATH >/dev/null 2>&1 
+	if [ ! -e "$DEFINE_TEMPLATE_PATH" ]; then
+		echo "failed!"
+		rm -r $templatePath
+		delete
+		exit 1
+	fi
+	popd >/dev/null 2>&1 
+
+	# add readme
+	pushd $DEFINE_TEMPLATE_PATH >/dev/null 2>&1 
+	echo "  $GREEN""add readme.md""$CLEAR"
+	echo "# Template" > readme.md
+	git add readme.md >/dev/null 2>&1 
+	git commit -m 'init' >/dev/null 2>&1 
+	echo "  $GREEN""push template""$CLEAR"
+	git push
+	if [ $? != 0 ]; then
+		rm -r $templatePath
+		exit 1
+	fi
+	popd >/dev/null 2>&1
+
+	# added twice?
+	git submodule add $templatePath $DEFINE_TEMPLATE_PATH >/dev/null 2>&1 
+	if [ ! -e "$DEFINE_TEMPLATE_PATH" ]; then
+		echo "failed!"
+		rm -r $templatePath
+		delete
+		exit 1
+	fi
+	popd >/dev/null 2>&1 
 
 }
 

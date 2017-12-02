@@ -4,7 +4,7 @@ checkBasic() {
 	# do a basic git command
 	git-status 1>/dev/null
 	# return error code, then exit !
-	if [ ! $? -eq 0 ]; then
+	if [ $? != 0 ]; then
 		exit 1
 	fi
 }
@@ -12,7 +12,8 @@ checkBasic() {
 checkAlreadyExist() {
 	# multiple template is not supported
 	if [ -d "$DEFINE_TEMPLATE_PATH" ]; then
-		echo "Template already defined ($DEFINE_TEMPLATE_PATH)"
+		echo "Template ($DEFINE_TEMPLATE_PATH) already defined"
+		echo "to remove it use: git template remove"
 		exit 1
 	fi
 }
@@ -29,6 +30,8 @@ delete() {
 	# remove submodule folder
 	git rm -f "$DEFINE_TEMPLATE_PATH" >/dev/null 2>&1 
 	rm -rf "$DEFINE_TEMPLATE_PATH" >/dev/null 2>&1
+}
+unref_cleancache() {
 	# clean up cached files/folders
 	# .gitmodules
 	git ls-files --error-unmatch .gitmodules >/dev/null 2>&1 && git rm --cached .gitmodules
@@ -36,39 +39,29 @@ delete() {
 	git ls-files --error-unmatch $DEFINE_TEMPLATE_PATH >/dev/null 2>&1 && git rm --cached $DEFINE_TEMPLATE_PATH
 }
 
+yesNoPrompt() {
+	[[ -t 0 ]] && read -e -n 1 -p "(Y/n)" res
+	if [[ $res =~ ^(y|Y)$ ]]
+	then
+		return 0 # err=0 mean success
+	else
+		return 1
+	fi
+}
+
 dbgShowVars() {
 	echo 
 	echo -- vars --
-	echo CURRENT_PATH: \"$CURRENT_PATH\" # ex: C:/dev/test/folder4
-	echo GITTEMPLATE_DIR: \"$GITTEMPLATE_DIR\" # ex: C:/dev/git-template
-	echo DEFINE_TEMPLATE_PATH: \"$DEFINE_TEMPLATE_PATH\" # ex .template
+	echo GITTEMPLATE_SCRIPT_PATH: \"$GITTEMPLATE_SCRIPT_PATH\"
+	echo GITTEMPLATE_DIR: \"$GITTEMPLATE_DIR\"
+	echo DEFINE_TEMPLATE_PATH: \"$DEFINE_TEMPLATE_PATH\"
 	echo ARGS: \"$@\" # ex: help remove help
 	echo SUBCOMMAND: \"$1\" # ex: remove
 	echo --
 }
 
-#dbgShowVars "$@"
+# dbgShowVars "$@"
 
-
-yesNo() {
-	o_xxxx=y                       # In batch mode => Default is Yes
-	[[ -t 0 ]] &&                  # If tty => prompt the question
-	read -t 5 -n 1 -p $'\e[1;32m
-	Do xxxx? (Y/n)\e[0m ' do_xxxx  # Store the answer in $do_xxxx
-	
-	if [[ $do_xxxx =~ ^(y|Y|)$ ]]  # Do if 'y', 'Y' or empty
-	then
-		echo "do!"
-	fi
-
-	#Explanations
-	#[[ -t 0 ]] && read ... => Call read only in TTY
-	#read -t 5 => Timeout 5 seconds
-	#read -n 1 => Wait for one character
-	#$'\e[1;32m ... \e[0m ' => Print in green
-	#(readable on both white/black backgrounds)
-	#[[ $do_xxxx =~ ^(y|Y|)$ ]] => bash regex
-}
 
 GRAY=$'\e[1;30m'
 RED=$'\e[1;31m'

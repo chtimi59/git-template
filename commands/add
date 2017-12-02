@@ -13,13 +13,13 @@ usage() {
 main() {
 	# sanity checks
 	[ $# -lt 1 ] && usage
-	re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
+	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
 	checkBasic
 	checkAlreadyExist
 
 	# parse arg options
-	repository=
-	branch_option="-b master"
+	local repository=
+	local branch_option="-b master"
 	# -
 	OPTIND=1
 	while getopts "b:" opt; do
@@ -30,7 +30,7 @@ main() {
 	done
 	shift $((OPTIND-1))
 	[ "$1" = "--" ] && shift
-	repository="$1"
+	local repository="$1"
 
 	# add submodule
 	git submodule add $branch_option $repository $DEFINE_TEMPLATE_PATH

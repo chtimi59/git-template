@@ -5,47 +5,75 @@ if [ "$DEBUG" = "yes" ]; then
 	set -x
 fi
 
-# Setup the GITTEMPLATE_DIR for different operating systems.
-# This is mostly to make sure that we get the correct directory when the
-# git-flow file is a symbolic link
+# different operating systems.
 case $(uname -s) in
 Linux)
-	export GITTEMPLATE_DIR=$(dirname "$(readlink -e "$0")")
-	export CURRENT_PATH=$(pwd)
+	echo 'warning: OS not tested yet'
+	pathresolve() {
+		local p=$1;
+		if [ -z $p ]; then read -r p; fi
+		readlink -e $p
+	}
+	export GITTEMPLATE_SCRIPT_PATH=`pathresolve "$0"`
 	;;
 FreeBSD|OpenBSD|NetBSD)
-	export FLAGS_GETOPT_CMD='/usr/local/bin/getopt'
-	export GITTEMPLATE_DIR=$(dirname "$(realpath "$0")")
-	export CURRENT_PATH=$(pwd)
+	echo 'warning: OS not tested yet'
+	pathresolve() {
+		local p=$1;
+		if [ -z $p ]; then read -r p; fi
+		realpath $p
+	}
+	export GITTEMPLATE_SCRIPT_PATH=`pathresolve "$0"`
+	
 	;;
 Darwin)
-	PRG="$0"
-	while [ -h "$PRG" ]; do
+	echo 'warning: OS not tested yet'
+	pathresolve() {
+		local p=$1;
+		if [ -z $p ]; then read -r p; fi
+		readlink -e $p
+	}
+	GITTEMPLATE_SCRIPT_PATH="$0"
+	while [ -h "$GITTEMPLATE_SCRIPT_PATH" ]; do
 		link=$(readlink "$0")
 		if expr "$link" : '/.*' > /dev/null; then
-			PRG="$link"
+			GITTEMPLATE_SCRIPT_PATH="$link"
 		else
-			PRG="$(dirname "$PRG")/$link"
+			GITTEMPLATE_SCRIPT_PATH="$(dirname "$GITTEMPLATE_SCRIPT_PATH")/$link"
 		fi
 	done
-	export GITTEMPLATE_DIR=$(dirname "$PRG")
-	export CURRENT_PATH=$(pwd)
 	;;
 *MINGW*)
-	export GITTEMPLATE_DIR=$(dirname "$(echo "$0" | sed -e 's,\\,/,g')")
-	pwd () {
-		builtin pwd -W
+	pathresolve() {
+		local p=$1;
+		if [ -z $p ]; then read -r p; fi
+		readlink -f $p | sed -e 's/\\/\//' -e  's/^[a-zA-Z]/\/\l\0/' -e  's/://'
 	}
-	export CURRENT_PATH=$(pwd)
+	export GITTEMPLATE_SCRIPT_PATH=`pathresolve "$0"`
+	;;
+*CYGWIN*)
+	echo 'warning: OS not tested yet'
+	pathresolve() {
+		local p=$1;
+		if [ -z $p ]; then read -r p; fi
+		cygpath -u -a $p
+	}
+	export GITTEMPLATE_SCRIPT_PATH=`pathresolve "$0"`
 	;;
 *)
-	# The sed expression here replaces all backslashes by forward slashes.
-	# This helps our Windows users, while not bothering our Unix users.)
-	export GITTEMPLATE_DIR=$(dirname "$(echo "$0" | sed -e 's,\\,/,g')")
-	export CURRENT_PATH=$(pwd)
+	echo 'warning: OS not tested yet'
+	pathresolve() {
+		local p=$1;
+		if [ -z $p ]; then read -r p; fi
+		# The sed expression here replaces all backslashes by forward slashes.
+		# This helps our Windows users, while not bothering our Unix users.)
+		readlink -f $p | sed -e 's/\\/\//'
+	}
+	export GITTEMPLATE_SCRIPT_PATH=`pathresolve "$0"`
 	;;
 esac
 
+export GITTEMPLATE_DIR=`dirname $GITTEMPLATE_SCRIPT_PATH`
 export DEFINE_TEMPLATE_PATH=".template"
 
 usage() {
@@ -76,3 +104,5 @@ main() {
 main "$@"
 
 
+#posix to windows
+#readlink -f $p | sed -e 's/^\///' -e 's/\//\\/g' -e 's/^\([a-zA-Z]\)\([^:].*\)$/\1:\2/' -e 's/^./\u\0/'
