@@ -32,8 +32,8 @@ main() {
 		local res=`pathresolve $res`
 		if false; then
 			echo dbg
-		#elif [ -e "$res" ]; then
-		#	echo "  path already exist"
+		elif [ -e "$res" ]; then
+			echo "  path already exist"
 		elif [[ $res == $projectTopPath\/* ]]; then
 			echo "  Couldn't create a repository inside another repository, consider '../' prefix"
 		else
