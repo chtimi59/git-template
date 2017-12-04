@@ -13,38 +13,39 @@ main() {
 	# sanity checks
 	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
 	checkBasic
-	checkAlreadyExist
+	checkTemplateNotExist
+
+	# prepare default prompt values
+	local projectTopPath=`git rev-parse --show-toplevel | pathresolve` # git project top folder
+	local bareRepoName="$(basename $projectTopPath).template.git"
+	local bareRepoPath=`pathresolve "$projectTopPath/../$bareRepoName"`
+	local bareRepoClone="$DEFINE_TEMPLATE_ROOTPATH/temp/"
 
 	echo "$GREEN""o Create a git bare repository""$CLEAR"
 
-	# prepare default prompt values
-	local baseDir=`git rev-parse --show-toplevel | pathresolve` # git project top folder
-	local templateName="$(basename $baseDir).template.git" # git project top folder Name
-	local templatePath=`pathresolve "$baseDir/../$templateName"` # pre-template path
-
-	# create templatePath folder
+	# create bare repo folder
 	local err=true
 	while $err; do
-		local res=$templatePath
+		local res=$bareRepoPath
 		[[ -t 0 ]] && read -rep "  $GREEN""choose path: ""$GRAY(default: '$res') $CLEAR" res
-		local re='^\s*$'; [[ "$res" =~ $re ]] && res=$templatePath
+		local re='^\s*$'; [[ "$res" =~ $re ]] && res=$bareRepoPath
 		local res=`pathresolve $res`
 		if false; then
 			echo dbg
 		#elif [ -e "$res" ]; then
 		#	echo "  path already exist"
-		elif [[ $res == $baseDir\/* ]]; then
+		elif [[ $res == $projectTopPath\/* ]]; then
 			echo "  Couldn't create a repository inside another repository, consider '../' prefix"
 		else
-			templatePath=$res;
-			echo "  path: $templatePath"
+			bareRepoPath=$res;
+			echo "  path: $bareRepoPath"
 			echo -n "  $GREEN""continue? ""$CLEAR"
 			yesNoPrompt
 			if [ $? != 0 ]; then
 				echo "  * canceled *"
 				exit 0
 			fi
-			mkdir -p $templatePath
+			mkdir -p $bareRepoPath
 			if [ $? -eq 0 ]; then
 				err=false;
 			fi
@@ -52,50 +53,60 @@ main() {
 	done
 
 	# git bare init
-	pushd $templatePath  >/dev/null 2>&1 
-	git init --bare
-	popd  >/dev/null 2>&1 
+	git init --bare $bareRepoPath >/dev/null 2>&1 
 	if [ $? != 0 ]; then
-		rm -r $templatePath
+		echo "couldn't create $bareRepoPath"
+		rm -r $bareRepoPath
 		exit 1
 	fi
-	
-	# add submodule
-	echo "$GREEN""o add template to project""$CLEAR"
-	pushd $baseDir >/dev/null 2>&1 
-	git submodule add $templatePath $DEFINE_TEMPLATE_PATH >/dev/null 2>&1 
-	if [ ! -e "$DEFINE_TEMPLATE_PATH" ]; then
-		echo "failed!"
-		rm -r $templatePath
-		delete
-		exit 1
-	fi
-	popd >/dev/null 2>&1 
 
-	# add readme
-	pushd $DEFINE_TEMPLATE_PATH >/dev/null 2>&1 
-	echo "  $GREEN""add readme.md""$CLEAR"
+	echo "$GREEN""o Push initial commit""$CLEAR"
+
+	# clone submodule
+	git clone $bareRepoPath $bareRepoClone >/dev/null 2>&1 
+	if [ ! -e "$bareRepoClone" ]; then
+		echo "clone failed!"
+		rm -rf $bareRepoPath
+		exit 1
+	fi
+
+	# go to temp folder
+	pushd $bareRepoClone >/dev/null 2>&1 
+
+	# make an initial commit
+	echo "  add readme.md"
 	echo "# Template" > readme.md
-	git add readme.md >/dev/null 2>&1 
-	git commit -m 'init' >/dev/null 2>&1 
-	echo "  $GREEN""push template""$CLEAR"
-	git push
-	if [ $? != 0 ]; then
-		rm -r $templatePath
-		exit 1
-	fi
+	git add . >/dev/null 2>&1 
+	git commit -m 'initial' >/dev/null 2>&1 
+
+	# push to origin (i.e. bare repo)
+	echo "  push to origin"
+	git push origin master >/dev/null 2>&1
+	local errCode=$?
+
+	# remove temp folder
 	popd >/dev/null 2>&1
+	rm -rf $DEFINE_TEMPLATE_ROOTPATH
 
-	# added twice?
-	git submodule add $templatePath $DEFINE_TEMPLATE_PATH >/dev/null 2>&1 
-	if [ ! -e "$DEFINE_TEMPLATE_PATH" ]; then
-		echo "failed!"
-		rm -r $templatePath
-		delete
+	if [ $errCode != 0 ]; then
+		echo "push failed!"
+		rm -rf $bareRepoPath
 		exit 1
 	fi
-	popd >/dev/null 2>&1 
 
+	echo "$GREEN""o Add template to your project""$CLEAR"
+
+	# add to project
+	addTemplate "master" $bareRepoPath
+	echo "  template added from local bare repository"
+	echo ""
+
+	echo "warning:"
+	echo "This template is defined locally."
+	echo "i.e. git-template's functionalities are also only available locally"
+	echo "If you need to share it, consider to switch template origin to a remote url"
+	echo ""
+	echo "use: 'git template origin <url>'"
 }
 
 main "$@"

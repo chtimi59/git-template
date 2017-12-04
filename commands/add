@@ -15,16 +15,16 @@ main() {
 	[ $# -lt 1 ] && usage
 	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
 	checkBasic
-	checkAlreadyExist
+	checkTemplateNotExist
 
 	# parse arg options
 	local repository=
-	local branch_option="-b master"
+	local branch="master"
 	# -
 	OPTIND=1
 	while getopts "b:" opt; do
 		case "$opt" in
-			b) branch_option="-b $OPTARG"
+			b) branch="$OPTARG"
 			;;
 		esac
 	done
@@ -32,13 +32,6 @@ main() {
 	[ "$1" = "--" ] && shift
 	local repository="$1"
 
-	# add submodule
-	git submodule add $branch_option $repository $DEFINE_TEMPLATE_PATH
-	if [ ! $? -eq 0 ]; then
-		delete
-		exit 1
-	fi
-
-	echo "done"
+	addTemplate $branch $repository 
 }
 main "$@"

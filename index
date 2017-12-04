@@ -74,7 +74,6 @@ Darwin)
 esac
 
 export GITTEMPLATE_DIR=`dirname $GITTEMPLATE_SCRIPT_PATH`
-export DEFINE_TEMPLATE_PATH=".template"
 
 usage() {
 	echo "usage: git template <subcommand>"

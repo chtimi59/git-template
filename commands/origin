@@ -1,0 +1,35 @@
+#!/bin/sh
+
+usage() {
+	echo "usage: git template origin <repo>"
+	echo ""
+	echo "change template origin"
+	echo ""
+	echo "    -h, --help            help"
+	exit 1
+}
+
+main() {
+	# sanity checks
+	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
+	checkBasic
+	checkTemplateExist
+	
+	if [ ! -d "$DEFINE_TEMPLATE_TREEPATH" ]; then
+		echo "Invalid Template"
+		echo "try: git template remove"
+		exit 1
+	fi
+
+	pushd $DEFINE_TEMPLATE_TREEPATH >/dev/null 2>&1 
+	git config remote.origin.url $1
+	local errCode=$?
+	popd >/dev/null 2>&1
+	if [ $errCode != 0 ]; then
+		echo "failed"
+		exit 1
+	fi
+
+}
+
+main "$@"

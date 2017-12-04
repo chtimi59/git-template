@@ -1,42 +1,70 @@
 #!/bin/sh
+export DEFINE_TEMPLATE_ROOTPATH=".template"
+export DEFINE_TEMPLATE_TREEPATH="$DEFINE_TEMPLATE_ROOTPATH/tree"
+export DEFINE_TEMPLATE_OBJECTPATH="$DEFINE_TEMPLATE_ROOTPATH/objects"
+export DEFINE_TEMPLATE_CONFIG="$DEFINE_TEMPLATE_ROOTPATH/config"
 
 checkBasic() {
-	# do a basic git command
+	# do a basic git command, to check git repo
 	git-status 1>/dev/null
-	# return error code, then exit !
 	if [ $? != 0 ]; then
 		exit 1
 	fi
 }
 
-checkAlreadyExist() {
+checkTemplateExist() {
+	if [ ! -d "$DEFINE_TEMPLATE_ROOTPATH" ]; then
+		echo "No Template found"
+		echo "to add one use: git template add"
+		exit 1
+	fi
+}
+
+checkTemplateNotExist() {
 	# multiple template is not supported
-	if [ -d "$DEFINE_TEMPLATE_PATH" ]; then
-		echo "Template ($DEFINE_TEMPLATE_PATH) already defined"
+	if [ -d "$DEFINE_TEMPLATE_ROOTPATH" ]; then
+		echo "Template ($DEFINE_TEMPLATE_ROOTPATH) already defined"
 		echo "to remove it use: git template remove"
 		exit 1
 	fi
 }
 
 delete() {
-	# remove submodule in .git/config
-	git config -f .git/config --remove-section submodule.$DEFINE_TEMPLATE_PATH >/dev/null 2>&1 
-	# remove submodule in .git/modules
-	rm -rf .git/modules/$DEFINE_TEMPLATE_PATH >/dev/null 2>&1 
-	# remove submodule in .gitmodules
-	git config -f .gitmodules --remove-section submodule.$DEFINE_TEMPLATE_PATH >/dev/null 2>&1 
-	# if .gitmodules is empty delete it
-	[ ! -s .gitmodules ] && rm -f .gitmodules >/dev/null 2>&1 
-	# remove submodule folder
-	git rm -f "$DEFINE_TEMPLATE_PATH" >/dev/null 2>&1 
-	rm -rf "$DEFINE_TEMPLATE_PATH" >/dev/null 2>&1
+	# remove template folder
+	git rm -rf "$DEFINE_TEMPLATE_ROOTPATH" >/dev/null 2>&1
+
+	# unfortunatly 'git rm -rf' is not enough
+	if true; then
+		# remove submodule in .git/config
+		git config -f .git/config --remove-section submodule.$DEFINE_TEMPLATE_TREEPATH >/dev/null 2>&1
+		# remove submodule in .git/modules
+		rm -rf .git/modules/$DEFINE_TEMPLATE_ROOT >/dev/null 2>&1 
+		# remove submodule in .gitmodules
+		git config -f .gitmodules --remove-section submodule.$DEFINE_TEMPLATE_TREEPATH >/dev/null 2>&1 
+		# if .gitmodules is empty delete it
+		[ ! -s .gitmodules ] && rm -f .gitmodules >/dev/null 2>&1 	
+	fi
+
+	# remove 
+	rm -r "$DEFINE_TEMPLATE_ROOTPATH" >/dev/null 2>&1 
+
+	# clean up cached files/folders if needed
+	git status --porcelain | sed -n 's/^.D \(\.template\/.*\)$/\1/p' | xargs -I {} git rm --cached {}
+	git status --porcelain | grep -q "^.D .gitmodules$" && git rm --cached .gitmodules
 }
-unref_cleancache() {
-	# clean up cached files/folders
-	# .gitmodules
-	git ls-files --error-unmatch .gitmodules >/dev/null 2>&1 && git rm --cached .gitmodules
-	# submodule folder
-	git ls-files --error-unmatch $DEFINE_TEMPLATE_PATH >/dev/null 2>&1 && git rm --cached $DEFINE_TEMPLATE_PATH
+
+addTemplate() {
+	local branch=$1;
+	local repo=$2;
+	mkdir -p $DEFINE_TEMPLATE_ROOTPATH
+	git submodule add -b $branch $repo $DEFINE_TEMPLATE_TREEPATH
+	if [ ! -e "$DEFINE_TEMPLATE_TREEPATH" ]; then
+		echo "Error couldn't add '$repo'"
+		delete
+		exit 1
+	fi
+	mkdir -p $DEFINE_TEMPLATE_OBJECTPATH
+	touch $DEFINE_TEMPLATE_CONFIG
 }
 
 yesNoPrompt() {
