@@ -9,4 +9,7 @@ cd $D
 
 git init
 git template init
-#git template unlock
+git template lock
+git template config core.sha master
+git template config core.sha
+git template unlock

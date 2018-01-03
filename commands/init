@@ -12,10 +12,21 @@ usage() {
 main() {
 	# sanity checks
 	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
-	checkTemplateNotExist
+	cd $DEFINE_PWD #useful ?
+	checkTemplateNotExist	
+	# create .template/tree folder
 	git init $DEFINE_TEMPLATE_TREEPATH >/dev/null 2>&1
+	# create .template/config file
 	touch $DEFINE_TEMPLATE_CONFIG >/dev/null 2>&1
+	# move .template/tree/.git into .template/database
+	# and delete .template/tree
 	lockTemplate
+	# -- Bonus if project container is also in git --
+	# do a basic git command, to check if it's a git repo
+	git status>/dev/null 2>&1 
+	[ $? != 0 ] && exit 0
+	# add template files to commit
+	git add $DEFINE_TEMPLATE_ROOTPATH >/dev/null 2>&1
 }
 
 main "$@"

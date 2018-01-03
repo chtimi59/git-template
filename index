@@ -79,9 +79,15 @@ usage() {
 	echo "usage: git template <subcommand>"
 	echo
 	echo "Available subcommands are:"
+	echo ""
+	echo "   init     init empty template"
 	echo "   add      add a template"
 	echo "   remove   remove template"
-	echo
+	echo ""
+	echo "   config   configure template instance"
+	echo "   unlock   make template editable"
+	echo "   lock     make template uneditable"	
+	echo ""
 	echo "Try 'git template <subcommand> help' for details."
 }
 
@@ -100,6 +106,7 @@ main() {
 	. "$GITTEMPLATE_DIR/common/index"
 	. "$GITTEMPLATE_DIR/commands/$SUBCOMMAND" $@
 }
+
 main "$@"
 
 

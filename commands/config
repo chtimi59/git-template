@@ -1,0 +1,46 @@
+#!/bin/sh
+
+usage() {
+	echo "usage: git template config <key> [value] [Options]"
+	echo ""
+	echo "get or set a template key"
+	echo ""
+	echo "Options"
+	echo ""
+	echo "    -l, --list            list all"
+	echo "    -e, --edit            open an editor"
+	echo "    -h, --help            help"	
+	echo ""
+	echo "Example:"
+	echo "    git template config core.sha"
+	echo "    git template config core.sha master"
+	exit 1
+}
+
+editor() {
+	local ed=$(git config core.editor)
+	if [ -z "$ed" ]; then
+		echo No editor configured
+		exit 1
+	fi
+	$ed $DEFINE_TEMPLATE_CONFIG
+	exit 0
+}
+
+list() {
+	checkTemplateExist
+	perl "$GITTEMPLATE_DIR/common/config.pl" list
+	exit 0
+}
+
+main() {
+	# sanity checks
+	[[ -z "$@" ]] && usage
+	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
+	local re='-+e(dit)?(\ |$)'; [[ "$@" =~ $re ]] && editor
+	local re='-+l(ist)?(\ |$)'; [[ "$@" =~ $re ]] && list
+	checkTemplateExist
+	perl "$GITTEMPLATE_DIR/common/config.pl" "$@"
+}
+
+main "$@"

@@ -4,52 +4,47 @@ export DEFINE_TEMPLATE_ROOTPATH="$DEFINE_PWD/.template"
 export DEFINE_TEMPLATE_TREEPATH="$DEFINE_TEMPLATE_ROOTPATH/tree"
 export DEFINE_TEMPLATE_DATABASE="$DEFINE_TEMPLATE_ROOTPATH/database"
 export DEFINE_TEMPLATE_CONFIG="$DEFINE_TEMPLATE_ROOTPATH/config"
+export DEFINE_TEMPLATE_PARSEFILE_SRC="$DEFINE_TEMPLATE_ROOTPATH/parse.source"
+export DEFINE_TEMPLATE_PARSEFILE_DST="$DEFINE_TEMPLATE_ROOTPATH/parse.destination"
 
 #make it ready for project container commit
 lockTemplate() {
-	cd $DEFINE_TEMPLATE_TREEPATH
-	# if git status not available then we assume
+	# if .template/tree not available then we assume
 	# that template is already lock
-	git status>/dev/null 2>&1 
-	if [ $? != 0 ]; then
+	if [ ! -d "$DEFINE_TEMPLATE_TREEPATH" ]; then 
+		echo Template already lock
 		exit 0
 	fi
 	# check out empty branch, to remove tree contains
+	cd "$DEFINE_TEMPLATE_TREEPATH"
 	git checkout --orphan empty >/dev/null 2>&1
 	git reset >/dev/null 2>&1
 	# only .git should remains, rename it into 'database'
 	mv ".git" $DEFINE_TEMPLATE_DATABASE	
-	cd $DEFINE_TEMPLATE_ROOTPATH
 	# delete remaining files (still?)
+	cd $DEFINE_TEMPLATE_ROOTPATH	
 	rm -rf $DEFINE_TEMPLATE_TREEPATH;
-	cd $DEFINE_PWD
-	# -- Bonus if project container is also in git --
-	# do a basic git command, to check if it's a git repo
-	git status>/dev/null 2>&1 
-	if [ $? != 0 ]; then
-		exit 0
-	fi
-	# add template files to commit
-	git add $DEFINE_TEMPLATE_ROOTPATH >/dev/null 2>&1
 }
 
 unlockTemplate() {
-	cd $DEFINE_TEMPLATE_TREEPATH
-	# if git status available then we assume
+	# if .template/tree is available then we assume
 	# that template is already unlock
-	git status>/dev/null 2>&1 
-	if [ $? == 0 ]; then
-		git checkout --orphan empty >/dev/null 2>&1
+	if [ -d "$DEFINE_TEMPLATE_TREEPATH" ]; then 
+		echo Template already unlock
 		exit 0
 	fi
-	mv -f $DEFINE_TEMPLATE_TREEPATH/git $DEFINE_TEMPLATE_TREEPATH/.git
+	mkdir "$DEFINE_TEMPLATE_TREEPATH"
+	mv -f $DEFINE_TEMPLATE_DATABASE $DEFINE_TEMPLATE_TREEPATH/.git
 	# read current hash if any
+	SHA=$(perl "$GITTEMPLATE_DIR/common/config.pl" core.sha);
+	echo -$SHA-;
 }
 
 checkTemplateExist() {
 	if [ ! -d "$DEFINE_TEMPLATE_ROOTPATH" ]; then
 		echo "No Template found"
-		echo "to add one use: git template add"
+		echo ""
+		echo "to add one use: 'git template add' or 'git template init'"
 		exit 1
 	fi
 }
@@ -58,7 +53,8 @@ checkTemplateNotExist() {
 	# multiple template is not supported
 	if [ -d "$DEFINE_TEMPLATE_ROOTPATH" ]; then
 		echo "Template ($DEFINE_TEMPLATE_ROOTPATH) already defined"
-		echo "to remove it use: git template remove"
+		echo ""
+		echo "to remove it use: 'git template remove'"
 		exit 1
 	fi
 }

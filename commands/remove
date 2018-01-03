@@ -3,7 +3,7 @@
 usage() {
 	echo "usage: git template remove [<options>]"
 	echo ""
-	echo "remove template submodule"
+	echo "remove template"
 	echo ""
 	echo "    -h, --help            help"
 	exit 1
@@ -12,10 +12,7 @@ usage() {
 main() {
 	# sanity checks
 	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
-	checkBasic
-	
-	# deletion
-	delete
+	rm -rf $DEFINE_TEMPLATE_ROOTPATH
 }
 
 main "$@"
