@@ -1,0 +1,25 @@
+#!/bin/sh
+
+usage() {
+	echo "usage: git template vars"
+	echo ""
+	echo "show internals variables"
+	echo ""
+	echo "    -h, --help            help"
+	exit 1
+}
+
+main() {
+	# sanity checks
+	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
+	echo 
+	echo -- vars --
+	echo GITTEMPLATE_SCRIPT_PATH: \"$GITTEMPLATE_SCRIPT_PATH\"
+	echo GITTEMPLATE_DIR: \"$GITTEMPLATE_DIR\"
+	echo DEFINE_TEMPLATE_ROOTPATH: \"$DEFINE_TEMPLATE_ROOTPATH\"
+	echo DEFINE_TEMPLATE_TREEPATH: \"$DEFINE_TEMPLATE_TREEPATH\"
+	echo DEFINE_TEMPLATE_CONFIG: \"$DEFINE_TEMPLATE_CONFIG\"
+	echo --
+}
+
+main "$@"

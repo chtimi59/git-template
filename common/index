@@ -1,15 +1,49 @@
 #!/bin/sh
-export DEFINE_TEMPLATE_ROOTPATH=".template"
+export DEFINE_PWD="$(pwd)"
+export DEFINE_TEMPLATE_ROOTPATH="$DEFINE_PWD/.template"
 export DEFINE_TEMPLATE_TREEPATH="$DEFINE_TEMPLATE_ROOTPATH/tree"
-export DEFINE_TEMPLATE_OBJECTPATH="$DEFINE_TEMPLATE_ROOTPATH/objects"
+export DEFINE_TEMPLATE_DATABASE="$DEFINE_TEMPLATE_ROOTPATH/database"
 export DEFINE_TEMPLATE_CONFIG="$DEFINE_TEMPLATE_ROOTPATH/config"
 
-checkBasic() {
-	# do a basic git command, to check git repo
-	git-status 1>/dev/null
+#make it ready for project container commit
+lockTemplate() {
+	cd $DEFINE_TEMPLATE_TREEPATH
+	# if git status not available then we assume
+	# that template is already lock
+	git status>/dev/null 2>&1 
 	if [ $? != 0 ]; then
-		exit 1
+		exit 0
 	fi
+	# check out empty branch, to remove tree contains
+	git checkout --orphan empty >/dev/null 2>&1
+	git reset >/dev/null 2>&1
+	# only .git should remains, rename it into 'database'
+	mv ".git" $DEFINE_TEMPLATE_DATABASE	
+	cd $DEFINE_TEMPLATE_ROOTPATH
+	# delete remaining files (still?)
+	rm -rf $DEFINE_TEMPLATE_TREEPATH;
+	cd $DEFINE_PWD
+	# -- Bonus if project container is also in git --
+	# do a basic git command, to check if it's a git repo
+	git status>/dev/null 2>&1 
+	if [ $? != 0 ]; then
+		exit 0
+	fi
+	# add template files to commit
+	git add $DEFINE_TEMPLATE_ROOTPATH >/dev/null 2>&1
+}
+
+unlockTemplate() {
+	cd $DEFINE_TEMPLATE_TREEPATH
+	# if git status available then we assume
+	# that template is already unlock
+	git status>/dev/null 2>&1 
+	if [ $? == 0 ]; then
+		git checkout --orphan empty >/dev/null 2>&1
+		exit 0
+	fi
+	mv -f $DEFINE_TEMPLATE_TREEPATH/git $DEFINE_TEMPLATE_TREEPATH/.git
+	# read current hash if any
 }
 
 checkTemplateExist() {
@@ -76,20 +110,6 @@ yesNoPrompt() {
 		return 1
 	fi
 }
-
-dbgShowVars() {
-	echo 
-	echo -- vars --
-	echo GITTEMPLATE_SCRIPT_PATH: \"$GITTEMPLATE_SCRIPT_PATH\"
-	echo GITTEMPLATE_DIR: \"$GITTEMPLATE_DIR\"
-	echo DEFINE_TEMPLATE_PATH: \"$DEFINE_TEMPLATE_PATH\"
-	echo ARGS: \"$@\" # ex: help remove help
-	echo SUBCOMMAND: \"$1\" # ex: remove
-	echo --
-}
-
-# dbgShowVars "$@"
-
 
 GRAY=$'\e[1;30m'
 RED=$'\e[1;31m'

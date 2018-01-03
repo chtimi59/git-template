@@ -1,9 +1,10 @@
 #!/bin/sh
 
 usage() {
-	echo "usage: git template init"
+	echo "usage: git template lock"
 	echo ""
-	echo "initialize an empty template"
+	echo "lock template to any changes"
+	echo "see also 'unlock'"
 	echo ""
 	echo "    -h, --help            help"
 	exit 1
@@ -12,9 +13,7 @@ usage() {
 main() {
 	# sanity checks
 	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
-	checkTemplateNotExist
-	git init $DEFINE_TEMPLATE_TREEPATH >/dev/null 2>&1
-	touch $DEFINE_TEMPLATE_CONFIG >/dev/null 2>&1
+	checkTemplateExist
 	lockTemplate
 }
 
