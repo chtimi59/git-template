@@ -1,44 +1,5 @@
 #!/bin/sh
-export DEFINE_PWD="$(pwd)"
-export DEFINE_TEMPLATE_ROOTPATH="$DEFINE_PWD/.template"
-export DEFINE_TEMPLATE_TREEPATH="$DEFINE_TEMPLATE_ROOTPATH/tree"
-export DEFINE_TEMPLATE_DATABASE="$DEFINE_TEMPLATE_ROOTPATH/database"
-export DEFINE_TEMPLATE_CONFIG="$DEFINE_TEMPLATE_ROOTPATH/config"
-export DEFINE_TEMPLATE_PARSEFILE_SRC="$DEFINE_TEMPLATE_ROOTPATH/parse.source"
-export DEFINE_TEMPLATE_PARSEFILE_DST="$DEFINE_TEMPLATE_ROOTPATH/parse.destination"
-
-#make it ready for project container commit
-lockTemplate() {
-	# if .template/tree not available then we assume
-	# that template is already lock
-	if [ ! -d "$DEFINE_TEMPLATE_TREEPATH" ]; then 
-		echo Template already lock
-		exit 0
-	fi
-	# check out empty branch, to remove tree contains
-	cd "$DEFINE_TEMPLATE_TREEPATH"
-	git checkout --orphan empty >/dev/null 2>&1
-	git reset >/dev/null 2>&1
-	# only .git should remains, rename it into 'database'
-	mv ".git" $DEFINE_TEMPLATE_DATABASE	
-	# delete remaining files (still?)
-	cd $DEFINE_TEMPLATE_ROOTPATH	
-	rm -rf $DEFINE_TEMPLATE_TREEPATH;
-}
-
-unlockTemplate() {
-	# if .template/tree is available then we assume
-	# that template is already unlock
-	if [ -d "$DEFINE_TEMPLATE_TREEPATH" ]; then 
-		echo Template already unlock
-		exit 0
-	fi
-	mkdir "$DEFINE_TEMPLATE_TREEPATH"
-	mv -f $DEFINE_TEMPLATE_DATABASE $DEFINE_TEMPLATE_TREEPATH/.git
-	# read current hash if any
-	SHA=$(perl "$GITTEMPLATE_DIR/common/config.pl" core.sha);
-	echo -$SHA-;
-}
+. "$GITTEMPLATE_DIR/common/defs"
 
 checkTemplateExist() {
 	if [ ! -d "$DEFINE_TEMPLATE_ROOTPATH" ]; then
@@ -59,6 +20,70 @@ checkTemplateNotExist() {
 	fi
 }
 
+isLocked() {
+	# if .template/tree not available then we assume
+	# that template is locked
+	if [ ! -d "$DEFINE_TEMPLATE_GITPATH" ]; then
+		return 0
+	fi
+	return 1
+}
+
+#make it ready for project container commit
+lockTemplate() {
+	if isLocked; then 
+		#echo Template already lock
+		return
+	fi
+	# check git status
+	cd "$DEFINE_TEMPLATE_GITPATH"
+	local status=$(git status --porcelain)
+	if [ ! -z "$status" ]; then
+		#echo Couldn\'t lock template
+		echo
+		git status
+		exit 1 
+	fi 
+	# update current SHA (can be branch, tag, or raw SHA)
+	local sha=$(git symbolic-ref -q --short HEAD || git describe --tags --exact-match 2>/dev/null || git rev-parse HEAD)
+	perl "$GITTEMPLATE_DIR/common/config.pl" core.sha $sha
+	git checkout --orphan empty >/dev/null 2>&1
+	git reset >/dev/null 2>&1
+	_lock
+}
+
+unlockTemplate() {
+	if ! isLocked; then 
+		#echo Template already unlock
+		return
+	fi
+	_unlock
+	# checks git satus
+	git status>/dev/null 2>&1 
+	if [ $? != 0 ]; then
+		echo Couldn\'t unlock template
+		echo Invalid template
+		_lock
+		exit 1
+	fi
+	# get SHA
+	SHA=$(perl "$GITTEMPLATE_DIR/common/config.pl" core.sha);
+	if [ -z "$SHA" ]; then 
+		echo Couldn\'t unlock template
+		echo Invalid SHA
+		_lock
+		exit 1
+	fi
+	git checkout $SHA >/dev/null 2>&1
+	if [ $? != 0 ]; then
+		echo Couldn\'t unlock template
+		echo checkout $SHA failed
+		_lock
+		exit 1
+	fi
+	mkdir -p "$DEFINE_TEMPLATE_CONTENT"
+}
+
 delete() {
 	# remove template folder
 	git rm -rf "$DEFINE_TEMPLATE_ROOTPATH" >/dev/null 2>&1
@@ -66,11 +91,11 @@ delete() {
 	# unfortunatly 'git rm -rf' is not enough
 	if true; then
 		# remove submodule in .git/config
-		git config -f .git/config --remove-section submodule.$DEFINE_TEMPLATE_TREEPATH >/dev/null 2>&1
+		git config -f .git/config --remove-section submodule.$DEFINE_TEMPLATE_GITPATH >/dev/null 2>&1
 		# remove submodule in .git/modules
 		rm -rf .git/modules/$DEFINE_TEMPLATE_ROOT >/dev/null 2>&1 
 		# remove submodule in .gitmodules
-		git config -f .gitmodules --remove-section submodule.$DEFINE_TEMPLATE_TREEPATH >/dev/null 2>&1 
+		git config -f .gitmodules --remove-section submodule.$DEFINE_TEMPLATE_GITPATH >/dev/null 2>&1 
 		# if .gitmodules is empty delete it
 		[ ! -s .gitmodules ] && rm -f .gitmodules >/dev/null 2>&1 	
 	fi
@@ -87,14 +112,14 @@ addTemplate() {
 	local branch=$1;
 	local repo=$2;
 	mkdir -p $DEFINE_TEMPLATE_ROOTPATH
-	git submodule add -b $branch $repo $DEFINE_TEMPLATE_TREEPATH
-	if [ ! -e "$DEFINE_TEMPLATE_TREEPATH" ]; then
+	git submodule add -b $branch $repo $DEFINE_TEMPLATE_GITPATH
+	if [ ! -e "$DEFINE_TEMPLATE_GITPATH" ]; then
 		echo "Error couldn't add '$repo'"
 		delete
 		exit 1
 	fi
 	mkdir -p $DEFINE_TEMPLATE_OBJECTPATH
-	touch $DEFINE_TEMPLATE_CONFIG
+	touch $DEFINE_TEMPLATE_INSTANCE_CONFIG
 }
 
 yesNoPrompt() {
@@ -106,15 +131,3 @@ yesNoPrompt() {
 		return 1
 	fi
 }
-
-GRAY=$'\e[1;30m'
-RED=$'\e[1;31m'
-GREEN=$'\e[1;32m'
-YELLOW=$'\e[1;33m'
-BLUE=$'\e[1;34m'
-PINK=$'\e[1;35m'
-CYAN=$'\e[1;36m'
-WHITE=$'\e[1;37m'
-ERROR=$'\e[1;37m\e[41m'
-SUCCESS=$'\e[1;37m\e[42m'
-CLEAR=$'\e[0m'

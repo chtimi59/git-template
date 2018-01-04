@@ -1,17 +1,18 @@
 #!/bin/sh
 
 usage() {
-	echo "usage: git template lock"
-	echo ""
-	echo "lock template to any changes"
-	echo "see also 'unlock'"
-	echo ""
-	echo "    -h, --help            help"
-	exit 1
+cat << EOM >&2
+usage: git template lock
+
+Forbid any template edition (this is the default state)
+see also 'unlock'
+
+    -h, --help            help
+EOM
+exit 1
 }
 
 main() {
-	# sanity checks
 	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
 	checkTemplateExist
 	lockTemplate

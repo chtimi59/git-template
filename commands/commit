@@ -1,21 +1,15 @@
 #!/bin/sh
 
 usage() {
-cat << EOM >&2
-usage: git template unlock
-
-unlock to allow template edition
-see also 'lock'
-
-    -h, --help            help
-EOM
-exit 1
+	git commit -h 2>&1 | sed 's/usage\:\ git/usage\:\ git template/g' >&2
+	exit 1
 }
 
 main() {
 	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
 	checkTemplateExist
 	unlockTemplate
+	cd "$DEFINE_TEMPLATE_GITPATH"
+	git commit "$@"
 }
-
 main "$@"

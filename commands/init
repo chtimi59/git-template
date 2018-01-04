@@ -1,27 +1,33 @@
 #!/bin/sh
 
 usage() {
-	echo "usage: git template init"
-	echo ""
-	echo "initialize an empty template"
-	echo ""
-	echo "    -h, --help            help"
-	exit 1
+cat << EOM >&2
+usage: git template init
+
+initialize an empty template
+
+    -h, --help            help
+EOM
+exit 1
 }
 
 main() {
-	# sanity checks
 	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
-	cd $DEFINE_PWD #useful ?
-	checkTemplateNotExist	
+	checkTemplateNotExist
 	# create .template/tree folder
-	git init $DEFINE_TEMPLATE_TREEPATH >/dev/null 2>&1
+	git init $DEFINE_TEMPLATE_GITPATH >/dev/null 2>&1	
+	# add some files
+	cd $DEFINE_TEMPLATE_GITPATH
+	git config core.autocrlf true
+	touch $DEFINE_TEMPLATE_CONFIG
+	touch $DEFINE_TEMPLATE_README
+	git add . >/dev/null 2>&1
+	git commit -m "initial"  >/dev/null 2>&1
 	# create .template/config file
-	touch $DEFINE_TEMPLATE_CONFIG >/dev/null 2>&1
-	# move .template/tree/.git into .template/database
-	# and delete .template/tree
+	touch $DEFINE_TEMPLATE_INSTANCE_CONFIG >/dev/null 2>&1
 	lockTemplate
-	# -- Bonus if project container is also in git --
+	# -- Bonus --
+	# if project container is also in git then,
 	# do a basic git command, to check if it's a git repo
 	git status>/dev/null 2>&1 
 	[ $? != 0 ] && exit 0

@@ -1,0 +1,24 @@
+#!/bin/sh
+
+usage() {
+cat << EOM >&2
+usage: git template apply
+
+Apply template to current project
+
+    -h, --help            help
+EOM
+exit 1
+}
+
+main() {
+	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
+	checkTemplateExist
+	unlockTemplate
+	# 1- get file list
+	find "$DEFINE_TEMPLATE_GITPATH" > "$DEFINE_TEMPLATE_PARSEFILE_SRC"
+	perl "$GITTEMPLATE_DIR/common/parseFile.pl" "$DEFINE_TEMPLATE_PARSEFILE_SRC"
+	# "$DEFINE_TEMPLATE_PARSEFILE_DST"
+}
+
+main "$@"

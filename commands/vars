@@ -1,25 +1,38 @@
 #!/bin/sh
 
 usage() {
-	echo "usage: git template vars"
-	echo ""
-	echo "show internals variables"
-	echo ""
-	echo "    -h, --help            help"
-	exit 1
+cat << EOM >&2
+usage: git template vars
+
+show internals variables
+
+    -h, --help            help
+EOM
+exit 1
 }
 
 main() {
-	# sanity checks
 	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
-	echo 
-	echo -- vars --
 	echo GITTEMPLATE_SCRIPT_PATH: \"$GITTEMPLATE_SCRIPT_PATH\"
 	echo GITTEMPLATE_DIR: \"$GITTEMPLATE_DIR\"
-	echo DEFINE_TEMPLATE_ROOTPATH: \"$DEFINE_TEMPLATE_ROOTPATH\"
-	echo DEFINE_TEMPLATE_TREEPATH: \"$DEFINE_TEMPLATE_TREEPATH\"
-	echo DEFINE_TEMPLATE_CONFIG: \"$DEFINE_TEMPLATE_CONFIG\"
-	echo --
+	echo 
+	echo DEFINE_PWD: \"$DEFINE_PWD\"
+	echo DEFINE_TEMPLATE_ROOTPATH: \"$DEFINE_TEMPLATE_ROOTPATH\"	
+	echo DEFINE_TEMPLATE_INSTANCE_CONFIG: \"$DEFINE_TEMPLATE_INSTANCE_CONFIG\"
+	echo 
+	echo -- if locked
+	echo DEFINE_TEMPLATE_LOCKNAME: \"$DEFINE_TEMPLATE_LOCKNAME\"
+	echo 
+	echo -- if unlocked
+	echo DEFINE_TEMPLATE_GITPATH: \"$DEFINE_TEMPLATE_GITPATH\"
+	echo DEFINE_TEMPLATE_CONTENT: \"$DEFINE_TEMPLATE_CONTENT\"
+	echo DEFINE_TEMPLATE_README: \"$DEFINE_TEMPLATE_README\"
+	echo DEFINE_TEMPLATE_CONFIG: \"$DEFINE_TEMPLATE_CONFIG\"	
+	echo 
+	echo -- temporary 
+	echo DEFINE_TEMPLATE_TMP: \"$DEFINE_TEMPLATE_TMP\"
+	echo DEFINE_TEMPLATE_PARSEFILE_SRC: \"$DEFINE_TEMPLATE_PARSEFILE_SRC\"
+	echo DEFINE_TEMPLATE_PARSEFILE_DST: \"$DEFINE_TEMPLATE_PARSEFILE_DST\"
 }
 
 main "$@"

@@ -10,6 +10,13 @@ cd $D
 git init
 git template init
 git template lock
-git template config core.sha master
-git template config core.sha
 git template unlock
+
+printf "int a=%%A%%;\r\n" > ./.template/repo/content/foo.c
+mkdir ./.template/repo/content/%%SRC%%
+printf "int b=%%b%%;\r\n" > ./.template/repo/content/%%SRC%%/bar.c
+git template add .
+git template commit -m "initial"
+
+git template lock
+

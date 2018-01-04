@@ -74,21 +74,25 @@ Darwin)
 esac
 
 export GITTEMPLATE_DIR=`dirname $GITTEMPLATE_SCRIPT_PATH`
+#posix to windows
+#readlink -f $p | sed -e 's/^\///' -e 's/\//\\/g' -e 's/^\([a-zA-Z]\)\([^:].*\)$/\1:\2/' -e 's/^./\u\0/'
 
 usage() {
-	echo "usage: git template <subcommand>"
-	echo
-	echo "Available subcommands are:"
-	echo ""
-	echo "   init     init empty template"
-	echo "   add      add a template"
-	echo "   remove   remove template"
-	echo ""
-	echo "   config   configure template instance"
-	echo "   unlock   make template editable"
-	echo "   lock     make template uneditable"	
-	echo ""
-	echo "Try 'git template <subcommand> help' for details."
+cat << EOM >&2
+usage: git template <subcommand>
+
+Available subcommands are:
+
+   init     init empty template
+   add      add a template
+   remove   remove template
+
+   config   configure template instance
+   unlock   make template editable
+   lock     make template uneditable
+
+Try 'git template <subcommand> help' for details.
+EOM
 }
 
 main() {
@@ -108,7 +112,3 @@ main() {
 }
 
 main "$@"
-
-
-#posix to windows
-#readlink -f $p | sed -e 's/^\///' -e 's/\//\\/g' -e 's/^\([a-zA-Z]\)\([^:].*\)$/\1:\2/' -e 's/^./\u\0/'

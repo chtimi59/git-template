@@ -1,16 +1,17 @@
 #!/bin/sh
 
 usage() {
-	echo "usage: git template remove [<options>]"
-	echo ""
-	echo "remove template"
-	echo ""
-	echo "    -h, --help            help"
-	exit 1
+cat << EOM >&2
+usage: git template remove
+
+remove template
+
+    -h, --help            help
+EOM
+exit 1
 }
 
 main() {
-	# sanity checks
 	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
 	rm -rf $DEFINE_TEMPLATE_ROOTPATH
 }

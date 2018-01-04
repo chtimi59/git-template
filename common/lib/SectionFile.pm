@@ -2,6 +2,10 @@ package SectionFile;
 use strict;
 use warnings;
 
+my $TRIM_REGEX = '^\s+|\s+$';
+my $SECTION_REGEX = '^\[(.+)\]$';
+my $ENTRY_REGEX = '^([^\=]+)\=([^\=]+)$';
+
 # read(filename)
 # return a hashtable
 sub read {
@@ -11,23 +15,23 @@ sub read {
     my $sectionName = "";
     my %hash;
     while ( my $line = <$fh> ) {
-        $line =~ s/^\s+|\s+$//g;
+        $line =~ s/$TRIM_REGEX//g;
         if (! $line eq "") {
             #section regular expression:
-            my @sectionReq = $line =~ m/^\[(.+)\]$/;
+            my @sectionReq = $line =~ m/$SECTION_REGEX/;
             #new section
             if (@sectionReq) {
                 $sectionName = $sectionReq[0];
-                $sectionName =~ s/^\s+|\s+$//g;
+                $sectionName =~ s/$TRIM_REGEX//g;
             } else {
                 (! $sectionName eq "") or die "Missing section in '$fileName'";
-                my @keyValueReq = $line =~ m/^([^\=]+)\=([^\=]+)$/;
+                my @keyValueReq = $line =~ m/$ENTRY_REGEX/;
                 (@keyValueReq) or die "Invalid entry in '$fileName'";
                 if (@keyValueReq) {
                     my $key = $keyValueReq[0];
-                    $key =~ s/^\s+|\s+$//g;
+                    $key =~ s/$TRIM_REGEX//g;
                     my $value = $keyValueReq[1];
-                    $value =~ s/^\s+|\s+$//g;
+                    $value =~ s/$TRIM_REGEX//g;
                     $hash{$sectionName}{$key} = $value;
                 }
             }

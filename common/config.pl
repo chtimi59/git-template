@@ -5,9 +5,23 @@ use File::Basename qw(dirname);
 use Cwd  qw(abs_path);
 use lib dirname(abs_path $0) . '/lib';
 use SectionFile;
+use Getopt::Long qw(GetOptions);
+Getopt::Long::Configure qw(gnu_getopt);
+
+# Options
+my $optList;
+my $optUnset;
+GetOptions(
+    'list|l' => \$optList,
+    'unset|u' => \$optUnset,
+) or exit 1;
 
 # Config file
-my $filename = $ENV{'DEFINE_TEMPLATE_CONFIG'};
+my $filename = $ENV{'DEFINE_TEMPLATE_INSTANCE_CONFIG'};
+if (! defined $filename) {
+    print STDERR "DEFINE_TEMPLATE_INSTANCE_CONFIG not set\n";
+    exit 1;
+}
 if (! -e $filename) {
     print STDERR "Config file '$filename' not found\n";
     exit 1;
@@ -16,15 +30,8 @@ if (! -e $filename) {
 # Dump config hash table
 my %data = SectionFile::read($filename);
 
-# Arguments
-my ($input, $value) = @ARGV;
-if (not defined $input) {
-  print STDERR "Missing Key\n";
-  exit 1; 
-}
-
-# Just the list ?
-if ($input eq "list") {
+# User just ask for the list ?
+if ($optList) {
     foreach my $sectionName (sort keys %data) {
         foreach my $key (sort keys %{ $data{$sectionName} }) {
             my $value = $data{$sectionName}{$key};
@@ -32,6 +39,13 @@ if ($input eq "list") {
         }
     }
     exit 0;
+}
+
+# Input arguments
+my ($input, $value) = @ARGV;
+if (not defined $input) {
+  print STDERR "Missing Key\n";
+  exit 1; 
 }
 
 # Check if <sectionName>.<Key> is correct
@@ -42,6 +56,12 @@ if (! @r) {
 }
 my $sectionName = $r[0];
 my $key = $r[1];
+
+if ($optUnset) {
+    delete $data{$sectionName}{$key};
+    SectionFile::write($filename, %data);
+    exit 0;
+}
 
 # Only Reading key ?
 if (not defined $value) {
