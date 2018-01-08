@@ -1,5 +1,7 @@
 #!/bin/perl
+package Prompt;
 use strict;
+#use warnings;
 
 my $fd = fileno(STDIN);
 
@@ -31,6 +33,12 @@ my %c_cc = (
 );
 
 sub printStatus {
+	print "----\n";
+	print "POSIX Terminal\n";
+	print "Expected Terminal Code: ECMA 048\n";
+	print "OS: $^O\n";
+	print "----\n";
+	print "\n";
     # modes d'entrée
     # Constante pour l'attribut c_iflag :
     my $c_iflag = $term->getiflag();
@@ -712,37 +720,47 @@ use constant {
 #   (undef, CUU, undef) => key up
 #
 sub readECMA048 {
+	my ($debug) = @_;
     my $buf;
     my $byte;
+	print "\nPress any key\n" if ($debug);
     read(STDIN, $buf, 1); $byte = ord($buf);
+	print " Key [$byte] pressed\n" if ($debug);
     # delete
     return (undef, "DEL", undef) if ($byte == DEL);
     # Character affichable ?
     return ($buf, undef, undef) if !isC0($byte);
     # C0 set ?
+	print " This is code belows to C0 set\n" if ($debug && isC0($byte) && ($byte != ESC));
     return (undef, $C0{$byte}, undef) if ($byte != ESC);
     # Escaped sequence
-    read(STDIN, $buf, 1); $byte = ord($buf);
+    read(STDIN, $buf, 1); $byte = ord($buf);	
     # ICF set ?
+	print " This is code belows to ICF set\n" if ($debug && isICF($byte));
     return (undef, $ICF{$byte}, undef) if (isICF($byte));
     # C1 set ?
+	print " This is code belows to C1 set\n" if ($debug && isC1($byte));
     if (isC1($byte))
-    {
+    {	
         my $C1Key = $C1{$byte};
         # Control String ?
         if (isC1_OpenControlString($byte)) {
+			print " This is code is a ControlString:\n   " if ($debug);
             my @CS = ();
             read(STDIN, $buf, 1); $byte = ord($buf);
             while (!isC1_CloseControlString($byte)) {
                 push(@CS, $byte);
+				print "[$byte]" if ($debug);
                 read(STDIN, $buf, 1);
                 $byte = ord($buf);
             }
+			print "\n" if ($debug);
             return (undef, $C1Key, @CS);
         }
         # Regular C1
         return (undef, $C1Key, undef) if ($C1Key != 'CSI');
         # CSI (Control sequences)
+		print " This is code is a CSI (Control sequences)\n" if ($debug);
         read(STDIN, $buf, 1); $byte = ord($buf);
         my @P = ();
         my @I = ();
@@ -758,22 +776,50 @@ sub readECMA048 {
             read(STDIN, $buf, 1);
             $byte = ord($buf);
         }
-
+		#final
+		my $F = $byte;
+		#debug
+		if ($debug) {
+			if (@P) {
+				print '  P=\'';
+				foreach my $p (@P) { print chr($p) }
+				print "\'\n";
+			}
+			if (@I) {
+				print '  I=';
+				foreach my $i (@I) { print "[$i]"; }
+				print "\n";
+			}
+			print "  F=[$F]\n";
+        }		
+		
         # private def (non standard)
-        return (undef, 'SUPR', undef) if ((@I == 0) && ($byte == 126) && (@P == 1) && ($P[0] == 51));
-
+		return (undef, 'CUP', undef) if ((@I == 0) && ($F == 126) && (@P == 1) && (chr($P[0]) eq '1'));		
+		return (undef, 'SUPR', undef) if ((@I == 0) && ($F == 126) && (@P == 1) && (chr($P[0]) eq '3'));
+		return (undef, 'CPL', undef) if ((@I == 0) && ($F == 126) && (@P == 1) && (chr($P[0]) eq '4'));
         # Final Byte
-        return (undef, $CSI_F{$byte}, @P) if (@I == 0);
-        return (undef, $CSI_32_F{$byte}, @P) if (@I == 1 && $I[0] == 32);
+        return (undef, $CSI_F{$F}, @P) if (@I == 0);
+        return (undef, $CSI_32_F{$F}, @P) if (@I == 1 && $I[0] == 32);
     }
     #unmanaged byte
     return (undef, undef, undef);
 }
 
+sub test {
+    cfmakeraw();
+	printStatus();
+	while(1) {
+		my ($char, $fnct, @parms) = readECMA048(1);
+		print "printable: '$char('".ord($char)."'\n" if (defined $char);
+		print "controle: [$fnct]\n" if (defined $fnct);
+		last if ($fnct eq 'LF');
+	}
+	restore();
+}	
+	
 sub promptLine {
     my ($prompt, $default, $test, @history) = @_;
     cfmakeraw();
-    #printStatus();
     
     my $input = ""; # buffer d'entree
     my $sucess = 0; # entree validee
@@ -789,14 +835,15 @@ sub promptLine {
         $fprompt .= GR_DEFAULT."($default)" if (defined $default);
         $fprompt .= GR_DEFAULT.": ";
         # initialise l'index dans l'historique
-        push(@history, "");
-        my $historyIdx = @history - 1;
+		my @tempHistory = @history;
+        push(@tempHistory, "");
+        my $historyIdx = @tempHistory - 1;
         
         # invitation
         
         { #sub reWriteLine#
             # mettre a jour l'historique
-            $history[$historyIdx] = $input;
+            $tempHistory[$historyIdx] = $input;
             # restore la ligne
             print $fprompt.$input;
             # repositionne le curseur
@@ -814,7 +861,7 @@ sub promptLine {
                 $pos++;
                 { #sub reWriteLine#
                     # mettre a jour l'historique
-                    $history[$historyIdx] = $input;
+                    $tempHistory[$historyIdx] = $input;
                     # restore la ligne
                     print $fprompt.$input;
                     # repositionne le curseur
@@ -823,6 +870,16 @@ sub promptLine {
             };
             # NEW LINE
             if ($fnct eq 'LF') {
+				#trim
+				$input =~ s/^\s+|\s+$//g;
+				{ #sub reWriteLine#
+					# mettre a jour l'historique
+					$tempHistory[$historyIdx] = $input;
+					# restore la ligne
+					print $fprompt.$input;
+					# repositionne le curseur
+					for(my $i=$pos; $i<length($input); $i++) { print CURSOR_LEFT; }
+				}
                 push(@history, $input);
                 last;
             }
@@ -831,7 +888,7 @@ sub promptLine {
                 $pos = 0;
                 { #sub reWriteLine#
                     # mettre a jour l'historique
-                    $history[$historyIdx] = $input;
+                    $tempHistory[$historyIdx] = $input;
                     # restore la ligne
                     print $fprompt.$input;
                     # repositionne le curseur
@@ -843,7 +900,7 @@ sub promptLine {
                 $pos = length($input);
                 { #sub reWriteLine#
                     # mettre a jour l'historique
-                    $history[$historyIdx] = $input;
+                    $tempHistory[$historyIdx] = $input;
                     # restore la ligne
                     print $fprompt.$input;
                     # repositionne le curseur
@@ -858,7 +915,7 @@ sub promptLine {
                     $input = "$before$after";
                     { #sub reWriteLine#
                         # mettre a jour l'historique
-                        $history[$historyIdx] = $input;
+                        $tempHistory[$historyIdx] = $input;
                         # restore la ligne
                         print $fprompt.$input;
                         # repositionne le curseur
@@ -869,13 +926,18 @@ sub promptLine {
             # BACKSPACE
             elsif ($fnct eq 'DEL') {
                 if ($pos > 0) {
+					#UTF-8
+					#110xxxxx => 2 bytes
+					#1110xxxxx => 3 bytes
+					#11110xxxxx => 4 bytes
+					my $nbOfBytesToDelete = 1;
                     my $before = substr $input, 0, $pos-1;
                     my $after = substr $input, $pos, length($input);
                     $input = "$before$after";
                     $pos--;
                     { #sub reWriteLine#
                         # mettre a jour l'historique
-                        $history[$historyIdx] = $input;
+                        $tempHistory[$historyIdx] = $input;
                         # restore la ligne
                         print $fprompt.$input;
                         # repositionne le curseur
@@ -901,11 +963,11 @@ sub promptLine {
             elsif ($fnct eq 'CUU') {
                 if ($historyIdx > 0) {
                     $historyIdx--;
-                    $input = $history[$historyIdx];
+                    $input = $tempHistory[$historyIdx];
                     $pos = length($input);
                     { #sub reWriteLine#
                         # mettre a jour l'historique
-                        $history[$historyIdx] = $input;
+                        $tempHistory[$historyIdx] = $input;
                         # restore la ligne
                         print $fprompt.$input;
                         # repositionne le curseur
@@ -915,13 +977,13 @@ sub promptLine {
             }
             # CURSOR DOWN
             elsif ($fnct eq 'CUD') {
-                if ($historyIdx < (@history - 1)) {
+                if ($historyIdx < (@tempHistory - 1)) {
                     $historyIdx++;
-                    $input = $history[$historyIdx];
+                    $input = $tempHistory[$historyIdx];
                     $pos = length($input);
                     { #sub reWriteLine#
                         # mettre a jour l'historique
-                        $history[$historyIdx] = $input;
+                        $tempHistory[$historyIdx] = $input;
                         # restore la ligne
                         print $fprompt.$input;
                         # repositionne le curseur
@@ -929,9 +991,12 @@ sub promptLine {
                     }
                 }
             }
-            #else { print "[$fnct]" if (defined $fnct); }
+            else { 
+				# Drop!
+				#print "[$fnct]" if (defined $fnct);
+			}
         }
-        
+        		
         # entree vide ?
         if ($input eq "" && defined $default) {
             $input = $default;
@@ -949,6 +1014,7 @@ sub promptLine {
                 $sucess = 1; last;
             } else {
                 print "Invalid input\n";
+				
             }
         }
         
@@ -957,13 +1023,16 @@ sub promptLine {
     return $input;
 }
 
-my $res;
+#test();
+#my $res;
 #$res = promptLine('Enter your name1 ');
 #print "$res\n";
 #$res = promptLine('Enter your name2 ','arthur');
 #print "$res\n";
 #$res = promptLine('Enter your name3 ','arthur','^[^0-9]+$');
 #print "$res\n";
-$res = promptLine('Enter your name4 ','arthur','^[^0-9]+$',('un','deux','trois'));
-print "$res\n";
+#$res = promptLine('Enter your name4 ','arthur','^[^0-9]+$',('un','deux','trois'));
+#print "$res\n";
 
+END { restore(); }
+1;

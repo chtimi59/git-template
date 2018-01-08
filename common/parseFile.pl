@@ -5,10 +5,10 @@ use File::Basename qw(dirname);
 use Cwd  qw(abs_path);
 use lib dirname(abs_path $0) . '/lib';
 use SectionFile;
+use Prompt;
 use Getopt::Long qw(GetOptions);
 Getopt::Long::Configure qw(gnu_getopt);
 use Data::Dumper qw(Dumper);
-#use Term::ReadLine;
 
 my $MAGIC_REGEX = '\%\%([^\%]+)\%\%';
 my $TRIM_REGEX = '^\s+|\s+$';
@@ -93,28 +93,13 @@ foreach my $key (@new) {
     my $default;
     if (exists $templateData{"$VARS_SECTION"}{$key.$VARS_DEFAULT}) {
         $default = $templateData{"$VARS_SECTION"}{$key.$VARS_DEFAULT};
-        $prompt = "$prompt ($default)";
     }
     my $test='.+';
     if (exists $templateData{"$VARS_SECTION"}{$key.$VARS_TEST}) {
         $test = $templateData{"$VARS_SECTION"}{$key.$VARS_TEST};
     }
-    my $ok = 0;
-    my $value = "";
-    while (! $ok) {
-        $ok = 0;
-        print "$prompt: ";
-        $value = <STDIN>;
-        chomp $value;
-        if (($value eq "") && (defined $default)) {
-            $value = $default;
-        };
-        if ($value =~ /$test/) {
-            $ok = 1;
-        } else {
-            print STDERR "invalid input\n"; 
-        };
-    }
+    my $value = Prompt::promptLine($prompt,$default,$test);
+	print "$value\n";
     $instanceData{$REPLACEMENT_SECTION}{$key} = $value;
 }
 #SectionFile::write($filename, %data);
