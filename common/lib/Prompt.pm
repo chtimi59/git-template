@@ -1,6 +1,7 @@
 #!/bin/perl
 package Prompt;
 use strict;
+use Fcntl;
 #use warnings;
 
 my $fd = fileno(STDIN);
@@ -33,12 +34,12 @@ my %c_cc = (
 );
 
 sub printStatus {
-	print "----\n";
-	print "POSIX Terminal\n";
-	print "Expected Terminal Code: ECMA 048\n";
-	print "OS: $^O\n";
-	print "----\n";
-	print "\n";
+    print "----\n";
+    print "POSIX Terminal\n";
+    print "Expected Terminal Code: ECMA 048\n";
+    print "OS: $^O\n";
+    print "----\n";
+    print "\n";
     # modes d'entrée
     # Constante pour l'attribut c_iflag :
     my $c_iflag = $term->getiflag();
@@ -260,8 +261,11 @@ sub cfmakeraw {
 
 # ---------------
 # Terminal Codes and Escape Sequences
-# ECMA 048
+# The first standard, adopted in 1976 is ECMA-48
 # http://www.ecma-international.org/publications/files/ECMA-ST/Ecma-048.pdf
+# then comes ANSI Standard (X3.64) 
+# The first popular video terminal to support these sequences was the Digital VT100, introduced in 1978
+# https://vt100.net/annarbor/aaa-ug/appendixa.html
 # ---------------
 
 # Rappel
@@ -390,6 +394,7 @@ my %ICF = (
 use constant {
     BPH => 66,
     NBH => 67,
+    IND => 68, #added from Vt100
     NEL => 69,
     SSA => 70,
     ESA => 71,
@@ -420,6 +425,7 @@ use constant {
 my %C1 = (
     BPH() => 'BPH',
     NBH() => 'NBH',
+    IND() => 'IND', #added from Vt100
     NEL() => 'NEL',
     SSA() => 'SSA',
     ESA() => 'ESA',
@@ -709,6 +715,83 @@ use constant {
 };
 
 
+sub readMultiByte
+{
+    my ($debug) = @_;
+    my $buffer;
+    print "\nPress any key\n" if ($debug);
+    my $count = sysread(STDIN, $buffer, 1000);
+    print " Key pressed ($count bytes)\n" if ($debug);
+    return (undef, undef, undef) if ($count == 0);
+    my @bytes = ();
+    for($i = 0; $i < $count; $i++) {
+        push(bytes, ord(bytes::substr($bufferm $i, 1)));
+    }
+    
+    # Delete key ?
+    return (undef, "DEL", undef) if ($count == 1 && $byte[0] == DEL);
+    # C0 set ?
+    if (isC0($byte[0])) {
+        print " This is code belows to C0 set\n" if ($debug && isC0($byte) && ($byte != ESC));
+        return (undef, $C0{$byte}, undef) if ($byte != ESC);
+    } else {
+        # Then Printable Character(s)
+        # can be a multiple bytes (ex: UTF-8)
+        return (undef, $buffer, undef)
+    }
+
+    # ESCaped sequence
+    # ICF set ?
+    print " This is code belows to ICF set\n" if ($debug && isICF($byte[1]));
+    return (undef, $ICF{$byte[1]}, undef) if (isICF($byte[1]));
+    # C1 set ?
+    print " This is code belows to C1 set\n" if ($debug && isC1($byte));
+    if (isC1($byte))
+    {    
+        my $C1Key = $C1{$byte[1]};
+        # Regular C1
+        return (undef, $C1Key, undef) if ($C1Key != 'CSI');
+        # CSI (Control sequences)
+        print " This is code is a CSI (Control sequences)\n" if ($debug);
+        my @P = ();
+        my @I = ();
+        my $idx = 1;
+        # Parameters
+        while ($idx < $count && isCSI_P($byte[$idx])) {
+            push(@P, $byte[$idx]);
+        }
+        # Intermediaire
+        while ($idx < $count && isCSI_I($byte[$idx])) {
+            push(@I, $byte[$idx]);
+        }
+        #final
+        my $F = $byte;
+        #debug
+        if ($debug) {
+            if (@P) {
+                print '  P=\'';
+                foreach my $p (@P) { print chr($p) }
+                print "\'\n";
+            }
+            if (@I) {
+                print '  I=';
+                foreach my $i (@I) { print "[$i]"; }
+                print "\n";
+            }
+            print "  F=[$F]\n";
+        }        
+        
+        # private def (non standard)
+        return (undef, 'CUP', undef) if ((@I == 0) && ($F == 126) && (@P == 1) && (chr($P[0]) eq '1'));        
+        return (undef, 'SUPR', undef) if ((@I == 0) && ($F == 126) && (@P == 1) && (chr($P[0]) eq '3'));
+        return (undef, 'CPL', undef) if ((@I == 0) && ($F == 126) && (@P == 1) && (chr($P[0]) eq '4'));
+        # Final Byte
+        return (undef, $CSI_F{$F}, @P) if (@I == 0);
+        return (undef, $CSI_32_F{$F}, @P) if (@I == 1 && $I[0] == 32);
+    }
+    #unmanaged byte
+    return (undef, undef, undef);
+}
 # read blocant avec decodage ECMA048
 # return ($char, $fnct, @parms)
 #     $char: printable char if any
@@ -720,47 +803,47 @@ use constant {
 #   (undef, CUU, undef) => key up
 #
 sub readECMA048 {
-	my ($debug) = @_;
+    my ($debug) = @_;
     my $buf;
     my $byte;
-	print "\nPress any key\n" if ($debug);
+    print "\nPress any key\n" if ($debug);
     read(STDIN, $buf, 1); $byte = ord($buf);
-	print " Key [$byte] pressed\n" if ($debug);
+    print " Key [$byte] pressed\n" if ($debug);
     # delete
     return (undef, "DEL", undef) if ($byte == DEL);
     # Character affichable ?
     return ($buf, undef, undef) if !isC0($byte);
     # C0 set ?
-	print " This is code belows to C0 set\n" if ($debug && isC0($byte) && ($byte != ESC));
+    print " This is code belows to C0 set\n" if ($debug && isC0($byte) && ($byte != ESC));
     return (undef, $C0{$byte}, undef) if ($byte != ESC);
     # Escaped sequence
-    read(STDIN, $buf, 1); $byte = ord($buf);	
+    read(STDIN, $buf, 1); $byte = ord($buf);    
     # ICF set ?
-	print " This is code belows to ICF set\n" if ($debug && isICF($byte));
+    print " This is code belows to ICF set\n" if ($debug && isICF($byte));
     return (undef, $ICF{$byte}, undef) if (isICF($byte));
     # C1 set ?
-	print " This is code belows to C1 set\n" if ($debug && isC1($byte));
+    print " This is code belows to C1 set\n" if ($debug && isC1($byte));
     if (isC1($byte))
-    {	
+    {    
         my $C1Key = $C1{$byte};
         # Control String ?
         if (isC1_OpenControlString($byte)) {
-			print " This is code is a ControlString:\n   " if ($debug);
+            print " This is code is a ControlString:\n   " if ($debug);
             my @CS = ();
             read(STDIN, $buf, 1); $byte = ord($buf);
             while (!isC1_CloseControlString($byte)) {
                 push(@CS, $byte);
-				print "[$byte]" if ($debug);
+                print "[$byte]" if ($debug);
                 read(STDIN, $buf, 1);
                 $byte = ord($buf);
             }
-			print "\n" if ($debug);
+            print "\n" if ($debug);
             return (undef, $C1Key, @CS);
         }
         # Regular C1
         return (undef, $C1Key, undef) if ($C1Key != 'CSI');
         # CSI (Control sequences)
-		print " This is code is a CSI (Control sequences)\n" if ($debug);
+        print " This is code is a CSI (Control sequences)\n" if ($debug);
         read(STDIN, $buf, 1); $byte = ord($buf);
         my @P = ();
         my @I = ();
@@ -776,27 +859,27 @@ sub readECMA048 {
             read(STDIN, $buf, 1);
             $byte = ord($buf);
         }
-		#final
-		my $F = $byte;
-		#debug
-		if ($debug) {
-			if (@P) {
-				print '  P=\'';
-				foreach my $p (@P) { print chr($p) }
-				print "\'\n";
-			}
-			if (@I) {
-				print '  I=';
-				foreach my $i (@I) { print "[$i]"; }
-				print "\n";
-			}
-			print "  F=[$F]\n";
-        }		
-		
+        #final
+        my $F = $byte;
+        #debug
+        if ($debug) {
+            if (@P) {
+                print '  P=\'';
+                foreach my $p (@P) { print chr($p) }
+                print "\'\n";
+            }
+            if (@I) {
+                print '  I=';
+                foreach my $i (@I) { print "[$i]"; }
+                print "\n";
+            }
+            print "  F=[$F]\n";
+        }        
+        
         # private def (non standard)
-		return (undef, 'CUP', undef) if ((@I == 0) && ($F == 126) && (@P == 1) && (chr($P[0]) eq '1'));		
-		return (undef, 'SUPR', undef) if ((@I == 0) && ($F == 126) && (@P == 1) && (chr($P[0]) eq '3'));
-		return (undef, 'CPL', undef) if ((@I == 0) && ($F == 126) && (@P == 1) && (chr($P[0]) eq '4'));
+        return (undef, 'CUP', undef) if ((@I == 0) && ($F == 126) && (@P == 1) && (chr($P[0]) eq '1'));        
+        return (undef, 'SUPR', undef) if ((@I == 0) && ($F == 126) && (@P == 1) && (chr($P[0]) eq '3'));
+        return (undef, 'CPL', undef) if ((@I == 0) && ($F == 126) && (@P == 1) && (chr($P[0]) eq '4'));
         # Final Byte
         return (undef, $CSI_F{$F}, @P) if (@I == 0);
         return (undef, $CSI_32_F{$F}, @P) if (@I == 1 && $I[0] == 32);
@@ -805,18 +888,56 @@ sub readECMA048 {
     return (undef, undef, undef);
 }
 
+sub test2 {
+
+    my $flags = "";
+    fcntl(STDIN, F_GETFL, $flags);
+    my $nonBlock = $flags | O_NONBLOCK;
+    my $block = $flags & ~O_NONBLOCK;
+    
+    $term->setiflag( BRKINT | ICRNL );
+    $term->setcflag( CSIZE );
+    $term->setlflag( ISIG );
+    $term->setattr($fd, TCSANOW);
+    #$term->setcc(VMIN, 0); $term->setcc(VTIME, 10);
+    #$term->setcc(VMIN, 1); $term->setcc(VTIME, 0);
+    # VMIN=1 VTIME=0
+    printStatus();
+
+    #é
+    while(1) {
+        print "Enter a key: \n";
+        my $buf = "";
+        my $count = 0;
+        $count = sysread(STDIN, $buf, 1000);
+        #$count = read(STDIN, $buf, 1000);
+        
+        # Extended sequence ? (unicode? esc control?)
+        #{
+        #    my $exBytes = "";
+        #    fcntl(STDIN, F_SETFL, $nonBlock);
+        #    $count += sysread(STDIN, $exBytes, 1000);
+        #    $buf = $buf.$exBytes if ($count > 1);
+        #    fcntl(STDIN, F_SETFL, $block);
+        #}
+
+        print "count = $count\n";
+    }
+    restore();
+}
+
 sub test {
     cfmakeraw();
-	printStatus();
-	while(1) {
-		my ($char, $fnct, @parms) = readECMA048(1);
-		print "printable: '$char('".ord($char)."'\n" if (defined $char);
-		print "controle: [$fnct]\n" if (defined $fnct);
-		last if ($fnct eq 'LF');
-	}
-	restore();
-}	
-	
+    printStatus();
+    while(1) {
+        my ($char, $fnct, @parms) = readECMA048(1);
+        print "printable: '$char('".ord($char)."'\n" if (defined $char);
+        print "controle: [$fnct]\n" if (defined $fnct);
+        last if ($fnct eq 'LF');
+    }
+    restore();
+}
+
 sub promptLine {
     my ($prompt, $default, $test, @history) = @_;
     cfmakeraw();
@@ -835,7 +956,7 @@ sub promptLine {
         $fprompt .= GR_DEFAULT."($default)" if (defined $default);
         $fprompt .= GR_DEFAULT.": ";
         # initialise l'index dans l'historique
-		my @tempHistory = @history;
+        my @tempHistory = @history;
         push(@tempHistory, "");
         my $historyIdx = @tempHistory - 1;
         
@@ -852,7 +973,7 @@ sub promptLine {
 
         # tant que NEW-LINE n'est pas appuye
         while (1) {
-            my ($char, $fnct, @parms) = readECMA048();
+            my ($char, $fnct, @parms) = readMultiByte();
             # INSERTION OF CHARACTERS
             if (defined $char) {
                 my $before = substr $input, 0, $pos;
@@ -870,16 +991,16 @@ sub promptLine {
             };
             # NEW LINE
             if ($fnct eq 'LF') {
-				#trim
-				$input =~ s/^\s+|\s+$//g;
-				{ #sub reWriteLine#
-					# mettre a jour l'historique
-					$tempHistory[$historyIdx] = $input;
-					# restore la ligne
-					print $fprompt.$input;
-					# repositionne le curseur
-					for(my $i=$pos; $i<length($input); $i++) { print CURSOR_LEFT; }
-				}
+                #trim
+                $input =~ s/^\s+|\s+$//g;
+                { #sub reWriteLine#
+                    # mettre a jour l'historique
+                    $tempHistory[$historyIdx] = $input;
+                    # restore la ligne
+                    print $fprompt.$input;
+                    # repositionne le curseur
+                    for(my $i=$pos; $i<length($input); $i++) { print CURSOR_LEFT; }
+                }
                 push(@history, $input);
                 last;
             }
@@ -926,11 +1047,11 @@ sub promptLine {
             # BACKSPACE
             elsif ($fnct eq 'DEL') {
                 if ($pos > 0) {
-					#UTF-8
-					#110xxxxx => 2 bytes
-					#1110xxxxx => 3 bytes
-					#11110xxxxx => 4 bytes
-					my $nbOfBytesToDelete = 1;
+                    #UTF-8
+                    #110xxxxx => 2 bytes
+                    #1110xxxxx => 3 bytes
+                    #11110xxxxx => 4 bytes
+                    my $nbOfBytesToDelete = 1;
                     my $before = substr $input, 0, $pos-1;
                     my $after = substr $input, $pos, length($input);
                     $input = "$before$after";
@@ -992,11 +1113,11 @@ sub promptLine {
                 }
             }
             else { 
-				# Drop!
-				#print "[$fnct]" if (defined $fnct);
-			}
+                # Drop!
+                #print "[$fnct]" if (defined $fnct);
+            }
         }
-        		
+                
         # entree vide ?
         if ($input eq "" && defined $default) {
             $input = $default;
@@ -1014,7 +1135,7 @@ sub promptLine {
                 $sucess = 1; last;
             } else {
                 print "Invalid input\n";
-				
+                
             }
         }
         
