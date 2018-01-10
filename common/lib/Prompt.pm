@@ -1,7 +1,6 @@
 #!/bin/perl
 package Prompt;
 use strict;
-use Fcntl;
 #use warnings;
 
 my $fd = fileno(STDIN);
@@ -199,31 +198,37 @@ sub printStatus {
 # et l'édition de ligne est désactivée.
 # Les valeurs MIN de (c_cc[VMIN]) et TIME de (c_cc[VTIME])
 # déterminent les circonstances dans lesquelles un read se termine;
-# il y a quatre cas distincts :
 #
-#    MIN == 0 ; TIME == 0:
-#    Si des données sont disponibles, read retourne immédiatement le nombre d'octets disponibles
-#    ou demandés (le plus petit des deux).
-#    Si aucune donnée n'est disponible, read renvoie 0.
+# Attention:
+# Make sure to unset the FNDELAY flag for descriptor using fcntl
+# otherwise VMIN/VTIME are ignored.
 #
-#    MIN > 0 ; TIME == 0:
-#    read bloque jusqu'à ce que soit MIN octets,
-#    soit le nombre d'octets demandés soient disponibles et retourne la plus petite de ces valeurs.
+# VTIME:
+#    Il s'agit d'un timer (unite 0.1s) interne
+#    Il est demarre a l'appel de read() (from user-space)
+#    et il est relance a chaque octet recu.
+#    Si le timer expire, read() retournera alors 0
+#
+#    Attention,
+#    si VMIN > 0, alors le timer ne demarre pas a l'appel de read(),
+#    mais apres la reception du premier octet.
+#
+# il y a donc quatre cas distincts :
+#
+#    VMIN == 0 ; VTIME == 0:
+#    read() retourne immédiatement le nombre d'octets disponibles (0 si aucune)
+#    il s'agit d'une forme de pooling tres gourmand en ressources CPU !
+#
+#    VMIN > 0 ; VTIME == 0:
+#    read() bloque jusqu'à ce qu'un au moins min(read_expected_size, VMIN) octets soient recus
 #
 #    MIN == 0 ; TIME > 0:
-#    TIME spécifie une limite de temporisation en dizièmes de seconde.
-#    La temporisation est lancée lorsque read est appelé.
-#    read retourne soit lorsque au moins un octet de donnée est disponible,
-#    soit lorsque la temporisation expire.
-#    Si la temporisation expire sans que des données aient été disponibles, read renvoie 0.
+#    read() jusqu'a la reception d'un octet au moins, ou a l'expiration du timer
 #
 #    MIN > 0 ; TIME > 0:
-#    TIME spécifie une limite de temporisation en dizièmes de seconde.
-#    Une fois qu'un premier octet est disponible en entrée,
-#    la temporisation est relancée après chaque octet reçu.
-#    read retourne soit lorsque le nombre d'octets demandés ou MIN octets (le plus petit des deux) ont été lus,
-#    soit lorsque la temporisation entre deux octets a expirée.
-#    Parce que la temporisation est lancée seulement après le premier octet, au moins un octet doit être lu.
+#    read() bloque jusqu'à ce qu'un au moins min(read_expected_size, VMIN) octets soient recus
+#    un timeout peut debloque le read() si plus rien ne se passe apres la reception du 
+#    premier octet
 #
 
 # restore config
@@ -253,7 +258,6 @@ sub restore {
 # le mode écho est désactivé de même que tous les traitements particuliers des caractères en entrée et en sortie.
 sub cfmakeraw {
     $term->setiflag( BRKINT | ICRNL );
-    #$term->setoflag( OPOST );
     $term->setcflag( CSIZE );
     $term->setlflag( ISIG );
     $term->setattr($fd, TCSANOW);
@@ -714,58 +718,53 @@ use constant {
     CURSOR_RIGHT => chr(ESC).chr(CSI).chr(CUF),
 };
 
-
-sub readMultiByte
+sub readMultiBytes
 {
     my ($debug) = @_;
-    my $buffer;
-    print "\nPress any key\n" if ($debug);
-    my $count = sysread(STDIN, $buffer, 1000);
-    print " Key pressed ($count bytes)\n" if ($debug);
-    return (undef, undef, undef) if ($count == 0);
-    my @bytes = ();
-    for($i = 0; $i < $count; $i++) {
-        push(bytes, ord(bytes::substr($bufferm $i, 1)));
-    }
+    my $in;
+    print "\nPress any key: " if ($debug);
+    STDOUT->printflush();
+    my $nb = sysread(STDIN, $in, 1000);
+    my @b = ();
+    for(my $i = 0; $i < $nb; $i++) { push(@b, ord(bytes::substr($in, $i, 1))) }
+    print "\nKey pressed ($nb bytes)\n" if ($debug);
+    return (undef, undef, undef) if ($nb == 0);
     
     # Delete key ?
-    return (undef, "DEL", undef) if ($count == 1 && $byte[0] == DEL);
+    return (undef, "DEL", undef) if ($nb == 1 && $b[0] == DEL);
     # C0 set ?
-    if (isC0($byte[0])) {
-        print " This is code belows to C0 set\n" if ($debug && isC0($byte) && ($byte != ESC));
-        return (undef, $C0{$byte}, undef) if ($byte != ESC);
+    if (isC0($b[0])) {
+        print "C0 set\n" if ($debug && ($b[0] != ESC));
+        return (undef, $C0{$b[0]}, undef) if ($b[0] != ESC);
     } else {
         # Then Printable Character(s)
-        # can be a multiple bytes (ex: UTF-8)
-        return (undef, $buffer, undef)
+        # Note it can be a multiple bytes (ex: UTF-8)
+        # of even a full string sequence (think copy'n and past in the terminal)
+        # in this case we, just foward the buffer
+        my $buffer = length(decode('UTF-8', $in));
+        return ($buffer, undef, undef)
     }
-
     # ESCaped sequence
     # ICF set ?
-    print " This is code belows to ICF set\n" if ($debug && isICF($byte[1]));
-    return (undef, $ICF{$byte[1]}, undef) if (isICF($byte[1]));
+    if (isICF($b[1])) {
+        print "ICF set\n" if ($debug);
+        return (undef, $ICF{$b[1]}, undef) ;
+    }
     # C1 set ?
-    print " This is code belows to C1 set\n" if ($debug && isC1($byte));
-    if (isC1($byte))
-    {    
-        my $C1Key = $C1{$byte[1]};
-        # Regular C1
-        return (undef, $C1Key, undef) if ($C1Key != 'CSI');
-        # CSI (Control sequences)
-        print " This is code is a CSI (Control sequences)\n" if ($debug);
+    if (isC1($b[1])) {
+        print "C1 set\n" if ($debug);
+        my $idx = 2;
         my @P = ();
         my @I = ();
-        my $idx = 1;
+        my $F;
         # Parameters
-        while ($idx < $count && isCSI_P($byte[$idx])) {
-            push(@P, $byte[$idx]);
-        }
+        while ($idx < $nb && isCSI_P($b[$idx])) { push(@P, $b[$idx]); $idx++ }
         # Intermediaire
-        while ($idx < $count && isCSI_I($byte[$idx])) {
-            push(@I, $byte[$idx]);
-        }
+        while ($idx < $nb && isCSI_I($b[$idx])) { push(@I, $b[$idx]); $idx++ }
         #final
-        my $F = $byte;
+        $F = $b[$idx] if ($idx < $nb);
+        # error
+        return (undef, undef, undef) if (!defined $F);
         #debug
         if ($debug) {
             if (@P) {
@@ -779,19 +778,19 @@ sub readMultiByte
                 print "\n";
             }
             print "  F=[$F]\n";
-        }        
-        
+        }
         # private def (non standard)
-        return (undef, 'CUP', undef) if ((@I == 0) && ($F == 126) && (@P == 1) && (chr($P[0]) eq '1'));        
+        return (undef, 'CUP', undef) if ((@I == 0) && ($F == 126) && (@P == 1) && (chr($P[0]) eq '1'));
         return (undef, 'SUPR', undef) if ((@I == 0) && ($F == 126) && (@P == 1) && (chr($P[0]) eq '3'));
         return (undef, 'CPL', undef) if ((@I == 0) && ($F == 126) && (@P == 1) && (chr($P[0]) eq '4'));
         # Final Byte
         return (undef, $CSI_F{$F}, @P) if (@I == 0);
         return (undef, $CSI_32_F{$F}, @P) if (@I == 1 && $I[0] == 32);
     }
-    #unmanaged byte
+    # unknown (probably constructor specific...)
     return (undef, undef, undef);
 }
+
 # read blocant avec decodage ECMA048
 # return ($char, $fnct, @parms)
 #     $char: printable char if any
@@ -889,39 +888,24 @@ sub readECMA048 {
 }
 
 sub test2 {
-
-    my $flags = "";
-    fcntl(STDIN, F_GETFL, $flags);
-    my $nonBlock = $flags | O_NONBLOCK;
-    my $block = $flags & ~O_NONBLOCK;
-    
-    $term->setiflag( BRKINT | ICRNL );
-    $term->setcflag( CSIZE );
-    $term->setlflag( ISIG );
-    $term->setattr($fd, TCSANOW);
-    #$term->setcc(VMIN, 0); $term->setcc(VTIME, 10);
-    #$term->setcc(VMIN, 1); $term->setcc(VTIME, 0);
-    # VMIN=1 VTIME=0
-    printStatus();
-
-    #é
-    while(1) {
-        print "Enter a key: \n";
-        my $buf = "";
-        my $count = 0;
-        $count = sysread(STDIN, $buf, 1000);
-        #$count = read(STDIN, $buf, 1000);
-        
-        # Extended sequence ? (unicode? esc control?)
-        #{
-        #    my $exBytes = "";
-        #    fcntl(STDIN, F_SETFL, $nonBlock);
-        #    $count += sysread(STDIN, $exBytes, 1000);
-        #    $buf = $buf.$exBytes if ($count > 1);
-        #    fcntl(STDIN, F_SETFL, $block);
-        #}
-
-        print "count = $count\n";
+    binmode(STDOUT, ":utf8");
+    cfmakeraw();
+    while(1)
+    {#cloé
+        my ($buffer, $fnct, @parms) = readMultiBytes(1);
+        if (defined $buffer) {
+            print "é$bufferé\n";
+            my $nb = bytes::length($buffer);
+            for(my $i = 0; $i < $nb; $i++) {
+                my $v = ord(bytes::substr($buffer, $i, 1));
+                printf("\\x%x", $v);
+            }
+            print "\n";
+            print "Characters count: ".length($buffer)."\n";
+            print "\n";
+        }
+        print "controle: [$fnct]\n" if (defined $fnct);
+        last if ($fnct eq 'LF');
     }
     restore();
 }
