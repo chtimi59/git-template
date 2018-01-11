@@ -725,9 +725,16 @@ use constant {
     CURSOR_RIGHT => chr(ESC).chr(CSI).chr(CUF),
 };
 
+# set current Cursor position
+sub setCursor {
+    my ($p) = @_; $p--;
+    my $c = getGetCursor();
+    print chr(ESC).chr(CSI)."$c".chr(CUB); #\r ?
+    print chr(ESC).chr(CSI)."$p".chr(CUF) if ($p>0);
+}
+
 # get current Cursor position
-sub getPos
-{
+sub getGetCursor {
     printf(SR_POSITION);
     STDOUT->printflush();
     my $in = "";
@@ -738,20 +745,19 @@ sub getPos
 }
 
 # print string and get current Cursor position
-sub printAndGetPos {
+sub printAndGetCursors {
     my ($string) = @_;
     my $len = length($string);
     my @list = ();
     for(my $i; $i<$len; $i++) {
         print substr($string, $i, 1);
-        push(@list, getPos());
+        push(@list, getGetCursor());
     }
     return @list;
 }
 
 #flush stdin buffer
-sub flushSTDIN
-{
+sub flushSTDIN {
     my ($waitTimeMs, $debug) = @_;
     my $out = 0;
     my $flags = "";
@@ -919,7 +925,9 @@ sub promptLine {
     while (!$sucess)
     {    
         # clear le buffer d'entree
-        $input = "";
+        $input = ""; # prompt user input
+        my $pos; # current position in input (character wise)
+        my @pos2cursor; # get terminal column (i.e. cursor) from position
         # format le prompt
         my $fprompt = ERASE_LINE."\r";
         $fprompt .= GR_GREEN.$prompt;
@@ -930,17 +938,12 @@ sub promptLine {
         push(@tempHistory, "");
         my $historyIdx = @tempHistory - 1;
         
-        # invitation
-        
-        { #sub reWriteLine#
-            # mettre a jour l'historique
-            $tempHistory[$historyIdx] = $input;
-            # restore la ligne
-            print $fprompt;
-            my @pos = (getPos());
-            # repositionne le curseur
-            #for(my $i=$pos; $i<length($input); $i++) { print CURSOR_LEFT; }
-        }
+        # Prompt d'Invitation
+        # affiche le prompt
+        print $fprompt;
+        $pos = 0;
+        push(@pos2cursor, getGetCursor());
+        setCursor($pos2cursor[$pos]);
 
         # tant que NEW-LINE n'est pas appuye
         while (1) {
@@ -950,107 +953,74 @@ sub promptLine {
                 my $before = substr $input, 0, $pos;
                 my $after = substr $input, $pos, length($input);
                 $input = "$before$string$after";
-                $pos += length($string);
-                { #sub reWriteLine#
-                    # mettre a jour l'historique
-                    $tempHistory[$historyIdx] = $input;
-                    # restore la ligne
-                    print "$fprompt$before";
-                    push(@pos, printAndGetPos($before$string));
-                    print $after;
-                    # repositionne le curseur
-                    for(my $i=$pos; $i<length($input); $i++) { print CURSOR_LEFT; }
-                }
+                $tempHistory[$historyIdx] = $input;
+                $pos = length("$before$string");
+                #re-render
+                print $fprompt;
+                @pos2cursor = printAndGetCursors($input);
+                setCursor($pos2cursor[$pos]);
             };
             # NEW LINE
             if ($fnct eq 'LF') {
                 #trim
                 $input =~ s/^\s+|\s+$//g;
-                { #sub reWriteLine#
-                    # mettre a jour l'historique
-                    $tempHistory[$historyIdx] = $input;
-                    # restore la ligne
-                    print $fprompt.$input;
-                    # repositionne le curseur
-                    for(my $i=$pos; $i<length($input); $i++) { print CURSOR_LEFT; }
-                }
+                $tempHistory[$historyIdx] = $input;
+                print $fprompt.$input;
                 push(@history, $input);
                 last;
             }
             # HOME
             elsif ($fnct eq 'CUP') {
                 $pos = 0;
-                { #sub reWriteLine#
-                    # mettre a jour l'historique
-                    $tempHistory[$historyIdx] = $input;
-                    # restore la ligne
-                    print $fprompt.$input;
-                    # repositionne le curseur
-                    for(my $i=$pos; $i<length($input); $i++) { print CURSOR_LEFT; }
-                }
+                setCursor($pos2cursor[$pos]);
             }
             # END
             elsif ($fnct eq 'CPL') {
                 $pos = length($input);
-                { #sub reWriteLine#
-                    # mettre a jour l'historique
-                    $tempHistory[$historyIdx] = $input;
-                    # restore la ligne
-                    print $fprompt.$input;
-                    # repositionne le curseur
-                    for(my $i=$pos; $i<length($input); $i++) { print CURSOR_LEFT; }
-                }
+                setCursor($pos2cursor[$pos]);
             }
             # DELETE
             elsif ($fnct eq 'SUPR') {
+                # Arabic non suppored
                 if ($pos < length($input)) {
                     my $before = substr $input, 0, $pos;
                     my $after = substr $input, $pos+1, length($input)-1;
                     $input = "$before$after";
-                    { #sub reWriteLine#
-                        # mettre a jour l'historique
-                        $tempHistory[$historyIdx] = $input;
-                        # restore la ligne
-                        print $fprompt.$input;
-                        # repositionne le curseur
-                        for(my $i=$pos; $i<length($input); $i++) { print CURSOR_LEFT; }
-                    }
+                    $tempHistory[$historyIdx] = $input;
+                    $pos = $pos; # no change
+                    #re-render
+                    print $fprompt;
+                    @pos2cursor = printAndGetCursors($input);
+                    setCursor($pos2cursor[$pos])
                 }
             }
             # BACKSPACE
             elsif ($fnct eq 'DEL') {
+                # Arabic non suppored
                 if ($pos > 0) {
-                    #UTF-8
-                    #110xxxxx => 2 bytes
-                    #1110xxxxx => 3 bytes
-                    #11110xxxxx => 4 bytes
-                    my $nbOfBytesToDelete = 1;
                     my $before = substr $input, 0, $pos-1;
                     my $after = substr $input, $pos, length($input);
                     $input = "$before$after";
-                    $pos--;
-                    { #sub reWriteLine#
-                        # mettre a jour l'historique
-                        $tempHistory[$historyIdx] = $input;
-                        # restore la ligne
-                        print $fprompt.$input;
-                        # repositionne le curseur
-                        for(my $i=$pos; $i<length($input); $i++) { print CURSOR_LEFT; }
-                    }
+                    $tempHistory[$historyIdx] = $input;
+                    $pos = $pos-1; # pop one position
+                    #re-render
+                    print $fprompt;
+                    @pos2cursor = printAndGetCursors($input);
+                    setCursor($pos2cursor[$pos]);
                 }
             }
             # CURSOR LEFT
             elsif ($fnct eq 'CUB') {
                 if ($pos > 0) {
                     $pos--;
-                    print CURSOR_LEFT;
+                    setCursor($pos2cursor[$pos]);
                 }
             }
             # CURSOR RIGHT
             elsif ($fnct eq 'CUF') {
                 if ($pos < length($input)) {
                     $pos++;
-                    print CURSOR_RIGHT;
+                    setCursor($pos2cursor[$pos]);
                 }
             }
             # CURSOR UP
@@ -1059,14 +1029,10 @@ sub promptLine {
                     $historyIdx--;
                     $input = $tempHistory[$historyIdx];
                     $pos = length($input);
-                    { #sub reWriteLine#
-                        # mettre a jour l'historique
-                        $tempHistory[$historyIdx] = $input;
-                        # restore la ligne
-                        print $fprompt.$input;
-                        # repositionne le curseur
-                        for(my $i=$pos; $i<length($input); $i++) { print CURSOR_LEFT; }
-                    }
+                    #re-render
+                    print $fprompt;
+                    @pos2cursor = printAndGetCursors($input);
+                    setCursor($pos2cursor[$pos]);
                 }
             }
             # CURSOR DOWN
@@ -1075,29 +1041,26 @@ sub promptLine {
                     $historyIdx++;
                     $input = $tempHistory[$historyIdx];
                     $pos = length($input);
-                    { #sub reWriteLine#
-                        # mettre a jour l'historique
-                        $tempHistory[$historyIdx] = $input;
-                        # restore la ligne
-                        print $fprompt.$input;
-                        # repositionne le curseur
-                        for(my $i=$pos; $i<length($input); $i++) { print CURSOR_LEFT; }
-                    }
+                    #re-render
+                    print $fprompt;
+                    @pos2cursor = printAndGetCursors($input);
+                    setCursor($pos2cursor[$pos]);
                 }
             }
-            # F2
+            # debug F2
             elsif ($fnct eq 'SSE') {
                 printf "\n";
-                print "historyIdx: $historyIdx\n";
-                print "pos: $pos\n";
-                print "length: ".length($input)."\n";
+                print "historyIdx: $historyIdx (total: ".@tempHistory.")\n";
+                print "pos: $pos (total: ".length($input).")\n";
+                print "Columns: \n";
+                foreach my $c (@pos2cursor) { print "  $c\n" }
             }
             else { 
                 # Drop!
                 #print "[$fnct]" if (defined $fnct);
             }
         }
-                
+
         # entree vide ?
         if ($input eq "" && defined $default) {
             $input = $default;
@@ -1135,8 +1098,10 @@ sub promptLine {
 #print "$res\n";
 #$res = promptLine('Enter your name3 ','arthur','^[^0-9]+$');
 #print "$res\n";
-#$res = promptLine('Enter your name4 ','arthur','^[^0-9]+$',('un','deux','trois'));
+#my $res = promptLine('Enter your name4 ','arthur','^[^0-9]+$',('un','deux','trois'));
 #print "$res\n";
+#'Enter your name4 (arthur): ' = 27
+# origin = 28
 
 END { restore(); }
 1;
