@@ -705,6 +705,8 @@ my %CSI_32_F = (
 
 use constant {
     # macros
+    # DSR - DEVICE STATUS REPORT
+    SR_POSITION => chr(ESC).chr(CSI)."6".chr(DSR), #see CPR - ACTIVE POSITION REPORT
     # SGR (SELECT GRAPHIC RENDITION)
     GR_GRAY => chr(ESC).chr(CSI)."1;30".chr(SGR),
     GR_RED => chr(ESC).chr(CSI)."1;31".chr(SGR),
@@ -723,6 +725,31 @@ use constant {
     CURSOR_RIGHT => chr(ESC).chr(CSI).chr(CUF),
 };
 
+# get current Cursor position
+sub getPos
+{
+    printf(SR_POSITION);
+    STDOUT->printflush();
+    my $in = "";
+    my $nb = sysread(STDIN, $in, 100);
+    my $reg = chr(ESC)."\\".chr(CSI)."([0-9]*)\;([0-9]+)".chr(CPR);
+    my @matches = $in =~ m/$reg/;
+    return $matches[1] if (@matches);
+}
+
+# print string and get current Cursor position
+sub printAndGetPos {
+    my ($string) = @_;
+    my $len = length($string);
+    my @list = ();
+    for(my $i; $i<$len; $i++) {
+        print substr($string, $i, 1);
+        push(@list, getPos());
+    }
+    return @list;
+}
+
+#flush stdin buffer
 sub flushSTDIN
 {
     my ($waitTimeMs, $debug) = @_;
@@ -893,8 +920,6 @@ sub promptLine {
     {    
         # clear le buffer d'entree
         $input = "";
-        # initialise la position du curseur
-        my $pos = 0; 
         # format le prompt
         my $fprompt = ERASE_LINE."\r";
         $fprompt .= GR_GREEN.$prompt;
@@ -911,9 +936,10 @@ sub promptLine {
             # mettre a jour l'historique
             $tempHistory[$historyIdx] = $input;
             # restore la ligne
-            print $fprompt.$input;
+            print $fprompt;
+            my @pos = (getPos());
             # repositionne le curseur
-            for(my $i=$pos; $i<length($input); $i++) { print CURSOR_LEFT; }
+            #for(my $i=$pos; $i<length($input); $i++) { print CURSOR_LEFT; }
         }
 
         # tant que NEW-LINE n'est pas appuye
@@ -929,7 +955,9 @@ sub promptLine {
                     # mettre a jour l'historique
                     $tempHistory[$historyIdx] = $input;
                     # restore la ligne
-                    print $fprompt.$input;
+                    print "$fprompt$before";
+                    push(@pos, printAndGetPos($before$string));
+                    print $after;
                     # repositionne le curseur
                     for(my $i=$pos; $i<length($input); $i++) { print CURSOR_LEFT; }
                 }
