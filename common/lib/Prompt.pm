@@ -727,10 +727,11 @@ use constant {
 
 # set current Cursor position
 sub setCursor {
-    my ($p) = @_; $p--;
-    my $c = getGetCursor();
-    print chr(ESC).chr(CSI)."$c".chr(CUB); #\r ?
-    print chr(ESC).chr(CSI)."$p".chr(CUF) if ($p>0);
+    my ($p) = @_;
+    $p--;
+    #my $c = getGetCursor();
+    #print chr(ESC).chr(CSI)."$c".chr(CUB); #\r ?
+    print "\r".chr(ESC).chr(CSI)."$p".chr(CUF) if ($p>0);
 }
 
 # get current Cursor position
@@ -746,9 +747,12 @@ sub getGetCursor {
 
 # print string and get current Cursor position
 sub printAndGetCursors {
-    my ($string) = @_;
+    my ($prompt, $string) = @_;
     my $len = length($string);
     my @list = ();
+    print ERASE_LINE."\r";
+    print $prompt;
+    push(@list, getGetCursor());
     for(my $i; $i<$len; $i++) {
         print substr($string, $i, 1);
         push(@list, getGetCursor());
@@ -926,11 +930,10 @@ sub promptLine {
     {    
         # clear le buffer d'entree
         $input = ""; # prompt user input
-        my $pos; # current position in input (character wise)
+        my $pos = 0; # current position in input (character wise)
         my @pos2cursor; # get terminal column (i.e. cursor) from position
         # format le prompt
-        my $fprompt = ERASE_LINE."\r";
-        $fprompt .= GR_GREEN.$prompt;
+        my $fprompt .= GR_GREEN.$prompt;
         $fprompt .= GR_DEFAULT."($default)" if (defined $default);
         $fprompt .= GR_DEFAULT.": ";
         # initialise l'index dans l'historique
@@ -940,9 +943,7 @@ sub promptLine {
         
         # Prompt d'Invitation
         # affiche le prompt
-        print $fprompt;
-        $pos = 0;
-        push(@pos2cursor, getGetCursor());
+        @pos2cursor = printAndGetCursors($fprompt, $input);
         setCursor($pos2cursor[$pos]);
 
         # tant que NEW-LINE n'est pas appuye
@@ -955,9 +956,7 @@ sub promptLine {
                 $input = "$before$string$after";
                 $tempHistory[$historyIdx] = $input;
                 $pos = length("$before$string");
-                #re-render
-                print $fprompt;
-                @pos2cursor = printAndGetCursors($input);
+                @pos2cursor = printAndGetCursors($fprompt, $input);
                 setCursor($pos2cursor[$pos]);
             };
             # NEW LINE
@@ -965,7 +964,7 @@ sub promptLine {
                 #trim
                 $input =~ s/^\s+|\s+$//g;
                 $tempHistory[$historyIdx] = $input;
-                print $fprompt.$input;
+                @pos2cursor = printAndGetCursors($fprompt, $input);
                 push(@history, $input);
                 last;
             }
@@ -988,9 +987,7 @@ sub promptLine {
                     $input = "$before$after";
                     $tempHistory[$historyIdx] = $input;
                     $pos = $pos; # no change
-                    #re-render
-                    print $fprompt;
-                    @pos2cursor = printAndGetCursors($input);
+                    @pos2cursor = printAndGetCursors($fprompt, $input);
                     setCursor($pos2cursor[$pos])
                 }
             }
@@ -1003,9 +1000,7 @@ sub promptLine {
                     $input = "$before$after";
                     $tempHistory[$historyIdx] = $input;
                     $pos = $pos-1; # pop one position
-                    #re-render
-                    print $fprompt;
-                    @pos2cursor = printAndGetCursors($input);
+                    @pos2cursor = printAndGetCursors($fprompt, $input);
                     setCursor($pos2cursor[$pos]);
                 }
             }
@@ -1029,9 +1024,7 @@ sub promptLine {
                     $historyIdx--;
                     $input = $tempHistory[$historyIdx];
                     $pos = length($input);
-                    #re-render
-                    print $fprompt;
-                    @pos2cursor = printAndGetCursors($input);
+                    @pos2cursor = printAndGetCursors($fprompt, $input);
                     setCursor($pos2cursor[$pos]);
                 }
             }
@@ -1041,9 +1034,7 @@ sub promptLine {
                     $historyIdx++;
                     $input = $tempHistory[$historyIdx];
                     $pos = length($input);
-                    #re-render
-                    print $fprompt;
-                    @pos2cursor = printAndGetCursors($input);
+                    @pos2cursor = printAndGetCursors($fprompt, $input);
                     setCursor($pos2cursor[$pos]);
                 }
             }

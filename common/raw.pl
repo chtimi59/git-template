@@ -10,8 +10,13 @@ use Getopt::Long qw(GetOptions);
 Getopt::Long::Configure qw(gnu_getopt);
 use Data::Dumper qw(Dumper);
 
-my $res = Prompt::promptLine('Enter your name4 ','arthur','^[^0-9]+$',('un','deux','trois'));
-print "$res\n";
+#print "abcd\b\bXX\e[2J";
+print "abcdXX";
+print "\e[3D";
+print "\e[0J";
+print "\n";
+#my $res = Prompt::promptLine('Enter your name4 ','arthur','^[^0-9]+$',('un','deux','trois'));
+#print "$res\n";
 
 #Prompt::test2();
 
