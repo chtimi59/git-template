@@ -21,7 +21,7 @@ use Data::Dumper qw(Dumper);
 #print "\e[3D";
 #print "\e[0J";
 #print "\n";
-my $res = Prompt::promptLine('Enter your name4 ',undef,'^[^0-9]+$',('un','deux','trois'));
+my $res = Prompt::promptLine('Enter your name4 ',undef,'^[^0-9]+$',('123'));
 print "$res\n";
 
 #Prompt::test2();

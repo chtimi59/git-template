@@ -733,8 +733,6 @@ use constant {
 sub setCursor {
     my ($p) = @_;
     $p--;
-    #my $c = getGetCursor();
-    #print chr(ESC).chr(CSI)."$c".chr(CUB); #\r ?
     print "\r".chr(ESC).chr(CSI)."$p".chr(CUF) if ($p>0);
 }
 
@@ -908,6 +906,24 @@ sub test {
     restore();
 }
 
+sub printInputLine {
+    my ($string, @pos2cursor) = @_;
+    my $len = length($string);
+    my $a;
+    my $last = $pos2cursor[@pos2cursor - 1];
+    for(my $i = 0; $i < $len; $i++) {
+        print substr($string, $i, 1);
+        
+        #my $a = getGetCursor();
+        #my $w = $a - $last;
+        my $w = 1;
+        
+        push(@pos2cursor, $last + $w);
+        my $last = $pos2cursor[@pos2cursor - 1];
+    }
+    return @pos2cursor;
+}
+
 sub promptLine {
     my ($prompt, $default, $test, @history) = @_;
     binmode(STDOUT, ":utf8");
@@ -941,19 +957,15 @@ sub promptLine {
             my ($string, $fnct, @parms) = read_ECMA048_UTF8();
             # INSERTION OF CHARACTERS
             if (defined $string) {
-                my $len;
+                my $len = length($string);
                 my $before = substr $input, 0, $pos;
                 my $after = substr $input, $pos, length($input);
                 my @list = @pos2cursor[$pos+1..@pos2cursor-1];
                 @pos2cursor = @pos2cursor[0..$pos];
                 # Output characters
                 my $start_offset = $pos2cursor[$pos];
-                $len = length($string);
-                for(my $i = 0; $i < $len; $i++) {
-                    print substr($string, $i, 1);
-                    push(@pos2cursor, getGetCursor());
-                    $pos++;
-                }
+                @pos2cursor = printInputLine($string, @pos2cursor);
+                $pos += $len;
                 my $offset = $pos2cursor[$pos] - $start_offset;
                 print $after;
                 # Update input buffer
@@ -965,7 +977,6 @@ sub promptLine {
                 for(my $i = 0; $i<$len; $i++) {
                     push(@pos2cursor, $list[$i] + $offset);
                 }
-
             };
             # NEW LINE
             if ($fnct eq 'LF') {
@@ -1069,11 +1080,7 @@ sub promptLine {
                     $pos = length($input);
                     setCursor($pos2cursor[0]);
                     @pos2cursor = @pos2cursor[0];
-                    my $len = length($input);
-                    for(my $i = 0; $i < $len; $i++) {
-                        print substr($input, $i, 1);
-                        push(@pos2cursor, getGetCursor());
-                    }
+                    @pos2cursor = printInputLine($input, @pos2cursor);
                     print ERASE_UPTOEND;
                 }
             }
@@ -1085,11 +1092,7 @@ sub promptLine {
                     $pos = length($input);
                     setCursor($pos2cursor[0]);
                     @pos2cursor = @pos2cursor[0];
-                    my $len = length($input);
-                    for(my $i = 0; $i < $len; $i++) {
-                        print substr($input, $i, 1);
-                        push(@pos2cursor, getGetCursor());
-                    }
+                    @pos2cursor = printInputLine($input, @pos2cursor);
                     print ERASE_UPTOEND;
                 }
             }
