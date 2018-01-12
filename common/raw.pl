@@ -10,13 +10,19 @@ use Getopt::Long qw(GetOptions);
 Getopt::Long::Configure qw(gnu_getopt);
 use Data::Dumper qw(Dumper);
 
+#my @accts = ( 1 .. 10);
+#print Dumper \@accts;
+#my $i=5;
+#my @accts3 = @accts[$i+1..@accts-1];
+#print Dumper \@accts3;
+
 #print "abcd\b\bXX\e[2J";
-print "abcdXX";
-print "\e[3D";
-print "\e[0J";
-print "\n";
-#my $res = Prompt::promptLine('Enter your name4 ','arthur','^[^0-9]+$',('un','deux','trois'));
-#print "$res\n";
+#print "abcdXX";
+#print "\e[3D";
+#print "\e[0J";
+#print "\n";
+my $res = Prompt::promptLine('Enter your name4 ',undef,'^[^0-9]+$',('un','deux','trois'));
+print "$res\n";
 
 #Prompt::test2();
 
@@ -25,7 +31,7 @@ print "\n";
 #test("汉",2);
 #test("𠜎",2);
 #\xc3\xa9	
-
+ 
 #printf "1\x65\bX\n"
 #printf "1\xc3\xa9\bX\n"
 #printf "1\xe0\xa4\x94\bX\n"

@@ -7,6 +7,7 @@ use Fcntl;
 
 use Time::HiRes qw(usleep);
 use POSIX qw(:termios_h);
+use Data::Dumper qw(Dumper);
 
 my $fd = fileno(STDIN);
 
@@ -721,6 +722,9 @@ use constant {
     GR_DEFAULT => chr(ESC).chr(CSI)."0".chr(SGR),
     # EL (ERASE LINE), 2=all character positions of the line are put into the erased state
     ERASE_LINE => chr(ESC).chr(CSI)."2".chr(EL),
+    # ED (ERASE FIELD), 0=erase character positions up to the end
+    ERASE_UPTOEND => chr(ESC).chr(CSI)."0".chr(ED),
+    #
     CURSOR_LEFT => chr(ESC).chr(CSI).chr(CUB),
     CURSOR_RIGHT => chr(ESC).chr(CSI).chr(CUF),
 };
@@ -743,21 +747,6 @@ sub getGetCursor {
     my $reg = chr(ESC)."\\".chr(CSI)."([0-9]*)\;([0-9]+)".chr(CPR);
     my @matches = $in =~ m/$reg/;
     return $matches[1] if (@matches);
-}
-
-# print string and get current Cursor position
-sub printAndGetCursors {
-    my ($prompt, $string) = @_;
-    my $len = length($string);
-    my @list = ();
-    print ERASE_LINE."\r";
-    print $prompt;
-    push(@list, getGetCursor());
-    for(my $i; $i<$len; $i++) {
-        print substr($string, $i, 1);
-        push(@list, getGetCursor());
-    }
-    return @list;
 }
 
 #flush stdin buffer
@@ -931,11 +920,12 @@ sub promptLine {
         # clear le buffer d'entree
         $input = ""; # prompt user input
         my $pos = 0; # current position in input (character wise)
-        my @pos2cursor; # get terminal column (i.e. cursor) from position
-        # format le prompt
-        my $fprompt .= GR_GREEN.$prompt;
-        $fprompt .= GR_DEFAULT."($default)" if (defined $default);
-        $fprompt .= GR_DEFAULT.": ";
+        my @pos2cursor = (); # get terminal column (i.e. cursor) from position
+    
+        print ERASE_LINE."\r";
+        print GR_GREEN.$prompt;
+        print GR_DEFAULT."($default)" if (defined $default);
+        print GR_DEFAULT.": ";
         # initialise l'index dans l'historique
         my @tempHistory = @history;
         push(@tempHistory, "");
@@ -943,7 +933,7 @@ sub promptLine {
         
         # Prompt d'Invitation
         # affiche le prompt
-        @pos2cursor = printAndGetCursors($fprompt, $input);
+        push(@pos2cursor, getGetCursor());
         setCursor($pos2cursor[$pos]);
 
         # tant que NEW-LINE n'est pas appuye
@@ -951,20 +941,40 @@ sub promptLine {
             my ($string, $fnct, @parms) = read_ECMA048_UTF8();
             # INSERTION OF CHARACTERS
             if (defined $string) {
+                my $len;
                 my $before = substr $input, 0, $pos;
                 my $after = substr $input, $pos, length($input);
-                $input = "$before$string$after";
-                $tempHistory[$historyIdx] = $input;
-                $pos = length("$before$string");
-                @pos2cursor = printAndGetCursors($fprompt, $input);
+                my @list = @pos2cursor[$pos+1..@pos2cursor-1];
+                @pos2cursor = @pos2cursor[0..$pos];
+                # Output characters
+                my $start_offset = $pos2cursor[$pos];
+                $len = length($string);
+                for(my $i = 0; $i < $len; $i++) {
+                    print substr($string, $i, 1);
+                    push(@pos2cursor, getGetCursor());
+                    $pos++;
+                }
+                my $offset = $pos2cursor[$pos] - $start_offset;
+                print $after;
+                # Update input buffer
+                $input = $before.$string.$after;
                 setCursor($pos2cursor[$pos]);
+                $tempHistory[$historyIdx] = $input;
+                # Update pos2cursor
+                $len = length($after);
+                for(my $i = 0; $i<$len; $i++) {
+                    push(@pos2cursor, $list[$i] + $offset);
+                }
+
             };
             # NEW LINE
             if ($fnct eq 'LF') {
                 #trim
                 $input =~ s/^\s+|\s+$//g;
                 $tempHistory[$historyIdx] = $input;
-                @pos2cursor = printAndGetCursors($fprompt, $input);
+                setCursor($pos2cursor[0]);
+                print ERASE_UPTOEND;
+                print $input;
                 push(@history, $input);
                 last;
             }
@@ -984,11 +994,27 @@ sub promptLine {
                 if ($pos < length($input)) {
                     my $before = substr $input, 0, $pos;
                     my $after = substr $input, $pos+1, length($input)-1;
-                    $input = "$before$after";
+                    # Get characters widths
+                    my $len = length($input);
+                    my @width = ();
+                    for(my $i = 0; $i < $len; $i++) {
+                        push(@width, $pos2cursor[$i+1] - $pos2cursor[$i]);
+                    }
+                    splice @width, $pos, 1;
+                    # Remove last character
+                    setCursor($pos2cursor[length($input)-1]);
+                    print ERASE_UPTOEND;
+                    setCursor($pos2cursor[$pos]);
+                    @pos2cursor = @pos2cursor[0];
+                    for(my $i = 0; $i < @width; $i++) {
+                         push(@pos2cursor, $pos2cursor[$i] + $width[$i]);
+                    }
+                    # Output characters
+                    print $after;
+                    # Update input buffer
+                    $input = $before.$after;
+                    setCursor($pos2cursor[$pos]);
                     $tempHistory[$historyIdx] = $input;
-                    $pos = $pos; # no change
-                    @pos2cursor = printAndGetCursors($fprompt, $input);
-                    setCursor($pos2cursor[$pos])
                 }
             }
             # BACKSPACE
@@ -997,11 +1023,28 @@ sub promptLine {
                 if ($pos > 0) {
                     my $before = substr $input, 0, $pos-1;
                     my $after = substr $input, $pos, length($input);
-                    $input = "$before$after";
-                    $tempHistory[$historyIdx] = $input;
-                    $pos = $pos-1; # pop one position
-                    @pos2cursor = printAndGetCursors($fprompt, $input);
+                    # Get characters widths
+                    my $len = length($input);
+                    my @width = ();
+                    for(my $i = 0; $i < $len; $i++) {
+                        push(@width, $pos2cursor[$i+1] - $pos2cursor[$i]);
+                    }
+                    $pos--;
+                    splice @width, $pos, 1;
+                    # Remove last character
+                    setCursor($pos2cursor[length($input)-1]);
+                    print ERASE_UPTOEND;
                     setCursor($pos2cursor[$pos]);
+                    @pos2cursor = @pos2cursor[0];
+                    for(my $i = 0; $i < @width; $i++) {
+                         push(@pos2cursor, $pos2cursor[$i] + $width[$i]);
+                    }
+                    # Output characters
+                    print $after;
+                    # Update input buffer
+                    $input = $before.$after;
+                    setCursor($pos2cursor[$pos]);
+                    $tempHistory[$historyIdx] = $input;
                 }
             }
             # CURSOR LEFT
@@ -1024,8 +1067,14 @@ sub promptLine {
                     $historyIdx--;
                     $input = $tempHistory[$historyIdx];
                     $pos = length($input);
-                    @pos2cursor = printAndGetCursors($fprompt, $input);
-                    setCursor($pos2cursor[$pos]);
+                    setCursor($pos2cursor[0]);
+                    @pos2cursor = @pos2cursor[0];
+                    my $len = length($input);
+                    for(my $i = 0; $i < $len; $i++) {
+                        print substr($input, $i, 1);
+                        push(@pos2cursor, getGetCursor());
+                    }
+                    print ERASE_UPTOEND;
                 }
             }
             # CURSOR DOWN
@@ -1034,17 +1083,30 @@ sub promptLine {
                     $historyIdx++;
                     $input = $tempHistory[$historyIdx];
                     $pos = length($input);
-                    @pos2cursor = printAndGetCursors($fprompt, $input);
-                    setCursor($pos2cursor[$pos]);
+                    setCursor($pos2cursor[0]);
+                    @pos2cursor = @pos2cursor[0];
+                    my $len = length($input);
+                    for(my $i = 0; $i < $len; $i++) {
+                        print substr($input, $i, 1);
+                        push(@pos2cursor, getGetCursor());
+                    }
+                    print ERASE_UPTOEND;
                 }
             }
             # debug F2
             elsif ($fnct eq 'SSE') {
                 printf "\n";
                 print "historyIdx: $historyIdx (total: ".@tempHistory.")\n";
-                print "pos: $pos (total: ".length($input).")\n";
-                print "Columns: \n";
-                foreach my $c (@pos2cursor) { print "  $c\n" }
+                print "input size: ".length($input)."\n";
+                print "Columns: (total: ".@pos2cursor.")\n";
+                for(my $i = 0; $i < @pos2cursor; $i++) {
+                    if ($i == $pos) {
+                        print "> ".$pos2cursor[$i]."\n";
+                    } else {
+                        print "  ".$pos2cursor[$i]."\n";
+                    }
+                }
+                last;
             }
             else { 
                 # Drop!
