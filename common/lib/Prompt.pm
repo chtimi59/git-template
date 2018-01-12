@@ -1,18 +1,86 @@
 #!/bin/perl
 package Prompt;
+
+# -----------------------------------------------------------------------------------
+# Prompt
+# Jan d'Orgeville - 2018
+#
+# Gives an inline prompt to the user, where
+#    - arrow keys gives user the comand history
+#    - support default value
+#    - regex test pattern
+# 
+# No external dependency!
+#
+# Limitation:
+#     - terminal in POSIX / UTF8
+# Tested on:
+#      - MINGW64 (windows10)
+#      - Xterm (Ubuntu)
+#      - OSX (10.10 Yosemite)
+#
+# Note: This lib doesn't have be tested with Arabic and Thai
+# -----------------------------------------------------------------------------------
+#
+# Usage example
+#
+# use File::Basename qw(dirname);
+# use Cwd  qw(abs_path);
+# use lib dirname(abs_path $0) . '/lib';
+# use Prompt;
+# use Data::Dumper qw(Dumper);
+#
+# #Simpler case
+# my $res1 = Prompt::promptLine('Name ');
+# print "$res1\n";
+#
+# #More complexe case (where TAB key is hooked)
+# sub callback {
+#     my ($string, $functionName, $p_ref, $input_ref) = @_;
+#     my @functionName = @$p_ref;
+#     if (defined $functionName && $functionName eq 'HT') {
+#         print "<break>\n";
+#         $$input_ref = "*!*";
+#         print "TAB pressed !";
+#         return 1;
+#     }
+# }
+# my @hist = ('123');
+# my $res = Prompt::promptLine('Name ','Albert','^[^0-9]+$',\@hist,\&callback);
+# print "$res\n";
+#
+# -----------------------------------------------------------------------------------
+# test case:
+# Chinese: 汉字; traditional Chinese: 漢字, lit "Han characters"
+# -----------------------------------------------------------------------------------
+
 use strict;
 #use warnings;
-use Encode;
-use Fcntl;
 
-use Time::HiRes qw(usleep);
-use POSIX qw(:termios_h);
-use Data::Dumper qw(Dumper);
+# helper to compute the sum of elements
+# in an array (from, to) are inclusive idx
+sub sumOfArrayValues {
+    my ($arr_ref, $from, $to) = @_;
+    $from = 0 if (!defined $from);
+    $to = @$arr_ref - 1 if (!defined $to);
+    my $sum = 0;
+    for (my $i = $from; $i <= $to; $i++) {
+        $sum += @$arr_ref[$i];
+    }
+    return $sum;
+}
 
-my $fd = fileno(STDIN);
 
+# ---------------
+# POSIX Terminal (termios)
 # http://manpagesfr.free.fr/man/man3/termios.3.html
 # http://search.cpan.org/~markov/POSIX-1003-0.98/lib/POSIX/1003/Termios.pod
+# ---------------
+use Fcntl;
+use Time::HiRes qw(usleep);
+use POSIX qw(:termios_h);
+
+my $fd = fileno(STDIN);
 my $term = POSIX::Termios->new($fd);
 
 # = POSIX function tcgetattr
@@ -179,8 +247,6 @@ sub printStatus {
     }
 }
 
-
-
 # ----------------
 # Canonique ?
 # ----------------
@@ -268,6 +334,46 @@ sub cfmakeraw {
     $term->setattr($fd, TCSANOW);
 }
 
+# posix system read
+sub _read {
+    $_[1] = 100 if (!defined $_[1]);
+    $_[1] = 100 if ($_[1] <= 0);
+    STDOUT->printflush(); # sysread() block stdout, we need to flush it manually
+    return sysread(STDIN, $_[0], $_[1]);
+}
+
+# flush stdin buffer
+# if specified wait a to couple of millisecond to let stdin buffer
+# filling itself before flushing it
+sub _flush {
+    my ($waitTimeMs, $debug) = @_;
+    my $out = 0;
+    my $flags = "";
+    fcntl(STDIN, F_GETFL, $flags);
+    fcntl(STDIN, F_SETFL, $flags | O_NONBLOCK);
+    my $nb = 1;
+    my $buf;
+    while($nb) {
+        usleep($waitTimeMs * 1000) if ($waitTimeMs);
+        $nb = sysread(STDIN, $buf, 1000);
+        if ($nb) {
+            $out = 1;
+            print "flush $nb\n" if ($nb && $debug);
+        }
+    }
+    fcntl(STDIN, F_SETFL, $flags & ~O_NONBLOCK);
+    return $out;
+}
+
+
+
+
+
+
+
+
+
+
 # ---------------
 # Terminal Codes and Escape Sequences
 # The first standard, adopted in 1976 is ECMA-48
@@ -281,6 +387,7 @@ sub cfmakeraw {
 # En ascii (7-bits) seul les bytes de 02/00 (32) a 07/15 (127) sont imprimables
 # En ascii (8-bits) les bytes de 08/00 (128) a 15/15 (255) sont imprimables (mode etendu)
 # Note leur definition depends du code-page utilisee (l'UTF8 se base sur ce mode etendu)
+use Encode;
 
 use constant DEL => 127;
 
@@ -729,47 +836,25 @@ use constant {
     CURSOR_RIGHT => chr(ESC).chr(CSI).chr(CUF),
 };
 
+
 # set current Cursor position
 sub setCursor {
     my ($p) = @_;
-    $p--;
-    print "\r".chr(ESC).chr(CSI)."$p".chr(CUF) if ($p>0);
+    print "\r".chr(ESC).chr(CSI).($p-1).chr(CUF) if ($p>0);
 }
 
 # get current Cursor position
 sub getGetCursor {
-    printf(SR_POSITION);
-    STDOUT->printflush();
     my $in = "";
-    my $nb = sysread(STDIN, $in, 100);
+    printf(SR_POSITION);
+    my $nb = _read($in);
     my $reg = chr(ESC)."\\".chr(CSI)."([0-9]*)\;([0-9]+)".chr(CPR);
     my @matches = $in =~ m/$reg/;
     return $matches[1] if (@matches);
 }
 
-#flush stdin buffer
-sub flushSTDIN {
-    my ($waitTimeMs, $debug) = @_;
-    my $out = 0;
-    my $flags = "";
-    fcntl(STDIN, F_GETFL, $flags);
-    fcntl(STDIN, F_SETFL, $flags | O_NONBLOCK);
-    my $nb = 1;
-    my $buf;
-    while($nb) { 
-        usleep($waitTimeMs * 1000) if ($waitTimeMs);
-        $nb = sysread(STDIN, $buf, 1000);
-        if ($nb) {
-            $out = 1;
-            print "flush $nb\n" if ($nb && $debug);
-        }
-    }
-    fcntl(STDIN, F_SETFL, $flags & ~O_NONBLOCK);
-    return $out;
-}
-
 # read blocant avec decodage ECMA048
-# return ($string, $fnct, @parms)
+# return ($string, $fnct, @params)
 #     $string: printable string if any (UTF8)
 #     $fnct: control function (string) -- see ECMA048, ex: "CUU"
 #     @params: optional array of bytes which defined fonction params -- see ECMA048
@@ -784,17 +869,20 @@ sub read_ECMA048_UTF8
     my $in; #raw byte buffer
     my $MAX = 255; #max nb of bytes
     print "\nPress any key: " if ($debug);
-    STDOUT->printflush(); # sysread() block stdout, we need to flush it manually
-    my $nb = sysread(STDIN, $in, $MAX);
+    my $nb = _read($in, $MAX);
     print "\n" if ($debug);
     my @b = ();
-    for(my $i = 0; $i < $nb; $i++) { push(@b, ord(bytes::substr($in, $i, 1))) }
+    for(my $i = 0; $i < $nb; $i++) { 
+        my $byte = ord(bytes::substr($in, $i, 1));
+        print "$byte\n" if ($debug);
+        push(@b, $byte);
+    }
     print "Key pressed ($nb bytes)\n" if ($debug);
     # large chunk detection (aka copy'n past)
     my $largeChunk = 1;
     while(1) {
         # If we've flushed something, then it was a large Chunk (by definition)
-        last if (flushSTDIN());
+        last if (_flush());
         # DEL should only have one byte
         last if (($b[0] == DEL) && ($nb>1));
         # C0 should only have one byte, except ESCaped sequence
@@ -807,10 +895,8 @@ sub read_ECMA048_UTF8
     };
     if ($largeChunk) {
         print "large Chunk detected!\n" if ($debug);
-        # flush it (retain time: 100ms)
-        flushSTDIN(50); #, $debug);
+        _flush(50); #, $debug);
     }
-    # TODO: Check if it can happend...
     if ($nb == 0) {
         print "return null (empty)\n" if ($debug);
         return (undef, undef, undef);
@@ -884,48 +970,58 @@ sub read_ECMA048_UTF8
     return (undef, undef, undef);
 }
 
-sub test {
-    binmode(STDOUT, ":utf8");
-    cfmakeraw();
-    while(1) {
-        my ($buffer, $fnct, @parms) = read_ECMA048_UTF8(1);
-        if (defined $buffer) {
-            print "\"$buffer\"\n";
-            my $nb = bytes::length($buffer);
-            for(my $i = 0; $i < $nb; $i++) {
-                my $v = ord(bytes::substr($buffer, $i, 1));
-                printf("\\x%x", $v);
-            }
-            print "\n";
-            print "Characters count: ".length($buffer)."\n";
-            print "\n";
-        }
-        print "controle: [$fnct]\n" if (defined $fnct);
-        last if ($fnct eq 'LF');
-    }
-    restore();
-}
 
-sub printInputLine {
-    my ($string, @pos2cursor) = @_;
+
+
+
+
+# --------------------------------
+# Prompt
+#
+# --------------------------------
+
+# Take avantage of printing UTF8 charcters one by one
+# to return each character width.
+sub printAnGetCharWidths {
+    my ($string) = @_;
+    my @widths = ();
+    my $a = getGetCursor();
     my $len = length($string);
-    my $a;
-    my $last = $pos2cursor[@pos2cursor - 1];
     for(my $i = 0; $i < $len; $i++) {
-        print substr($string, $i, 1);
-        
-        #my $a = getGetCursor();
-        #my $w = $a - $last;
-        my $w = 1;
-        
-        push(@pos2cursor, $last + $w);
-        my $last = $pos2cursor[@pos2cursor - 1];
+        my $char = substr($string, $i, 1);
+        print $char;
+        my $b = $a + 1;
+        # CJK characters
+        $b=getGetCursor() if (bytes::length($char) > 1);
+        push(@widths, $b - $a);
+        $a= $b;
     }
-    return @pos2cursor;
+    return @widths;
 }
 
+# setCursor Formula
+sub setCursorFromPos {
+    my ($column0, $pos, @widths) = @_;
+    setCursor($column0 + sumOfArrayValues(\@widths, 0, $pos-1));
+}
+
+# ---------
+# Prompt
+# public method to prompt somthing to user
+# params
+#    $prompt: prompt string
+#    $default: optional default value
+#    $test: optional regex test
+#    $history: optional prexisting history array (ref)
+#    $callback: optional callback (ref) see read_ECMA048_UTF8
+#
+# sub callback {
+#    my ($string, $fnct, @params) = @_;
+#    # ...
+# }
+# ---------
 sub promptLine {
-    my ($prompt, $default, $test, @history) = @_;
+    my ($prompt, $default, $test, $history, $callback) = @_;
     binmode(STDOUT, ":utf8");
     cfmakeraw();
     
@@ -936,96 +1032,67 @@ sub promptLine {
         # clear le buffer d'entree
         $input = ""; # prompt user input
         my $pos = 0; # current position in input (character wise)
-        my @pos2cursor = (); # get terminal column (i.e. cursor) from position
+        my @widths = (); # get characters column width
     
         print ERASE_LINE."\r";
         print GR_GREEN.$prompt;
         print GR_DEFAULT."($default)" if (defined $default);
-        print GR_DEFAULT.": ";
+        print GR_DEFAULT;
+        print ": ";
         # initialise l'index dans l'historique
-        my @tempHistory = @history;
+        my @tempHistory = ();
+        push(@tempHistory, @$history) if (defined $history);
         push(@tempHistory, "");
         my $historyIdx = @tempHistory - 1;
         
         # Prompt d'Invitation
         # affiche le prompt
-        push(@pos2cursor, getGetCursor());
-        setCursor($pos2cursor[$pos]);
+        my $column0 = getGetCursor();
+        setCursor($column0);
 
         # tant que NEW-LINE n'est pas appuye
         while (1) {
-            my ($string, $fnct, @parms) = read_ECMA048_UTF8();
+            
+            my ($string, $fnct, @params) = read_ECMA048_UTF8(0);
+            
             # INSERTION OF CHARACTERS
             if (defined $string) {
-                my $len = length($string);
                 my $before = substr $input, 0, $pos;
+                my @w_before = @widths[0..$pos-1];
                 my $after = substr $input, $pos, length($input);
-                my @list = @pos2cursor[$pos+1..@pos2cursor-1];
-                @pos2cursor = @pos2cursor[0..$pos];
+                my @w_after = @widths[$pos..@widths-1];
                 # Output characters
-                my $start_offset = $pos2cursor[$pos];
-                @pos2cursor = printInputLine($string, @pos2cursor);
-                $pos += $len;
-                my $offset = $pos2cursor[$pos] - $start_offset;
-                print $after;
+                @widths = ();
+                push(@widths, @w_before);
+                push(@widths, printAnGetCharWidths($string));
+                print $after.ERASE_UPTOEND;
+                push(@widths, @w_after);
                 # Update input buffer
                 $input = $before.$string.$after;
-                setCursor($pos2cursor[$pos]);
                 $tempHistory[$historyIdx] = $input;
-                # Update pos2cursor
-                $len = length($after);
-                for(my $i = 0; $i<$len; $i++) {
-                    push(@pos2cursor, $list[$i] + $offset);
-                }
+                # re-place cursor
+                $pos += length($string);
             };
-            # NEW LINE
-            if ($fnct eq 'LF') {
-                #trim
-                $input =~ s/^\s+|\s+$//g;
-                $tempHistory[$historyIdx] = $input;
-                setCursor($pos2cursor[0]);
-                print ERASE_UPTOEND;
-                print $input;
-                push(@history, $input);
-                last;
-            }
-            # HOME
-            elsif ($fnct eq 'CUP') {
-                $pos = 0;
-                setCursor($pos2cursor[$pos]);
-            }
-            # END
-            elsif ($fnct eq 'CPL') {
-                $pos = length($input);
-                setCursor($pos2cursor[$pos]);
-            }
+
+            if(0) {}
             # DELETE
             elsif ($fnct eq 'SUPR') {
                 # Arabic non suppored
                 if ($pos < length($input)) {
                     my $before = substr $input, 0, $pos;
+                    my @w_before = @widths[0..$pos-1];
                     my $after = substr $input, $pos+1, length($input)-1;
-                    # Get characters widths
-                    my $len = length($input);
-                    my @width = ();
-                    for(my $i = 0; $i < $len; $i++) {
-                        push(@width, $pos2cursor[$i+1] - $pos2cursor[$i]);
-                    }
-                    splice @width, $pos, 1;
-                    # Remove last character
-                    setCursor($pos2cursor[length($input)-1]);
-                    print ERASE_UPTOEND;
-                    setCursor($pos2cursor[$pos]);
-                    @pos2cursor = @pos2cursor[0];
-                    for(my $i = 0; $i < @width; $i++) {
-                         push(@pos2cursor, $pos2cursor[$i] + $width[$i]);
-                    }
+                    my @w_after = @widths[$pos+1..@widths-1];
                     # Output characters
-                    print $after;
+                    @widths = ();
+                    push(@widths, @w_before);
+                    print $after.ERASE_UPTOEND;
+                    push(@widths, @w_after);
                     # Update input buffer
-                    $input = $before.$after;
-                    setCursor($pos2cursor[$pos]);
+                    $input = $before.$string.$after;
                     $tempHistory[$historyIdx] = $input;
+                    # re-place cursor
+                    $pos += 0;
                 }
             }
             # BACKSPACE
@@ -1033,87 +1100,104 @@ sub promptLine {
                 # Arabic non suppored
                 if ($pos > 0) {
                     my $before = substr $input, 0, $pos-1;
+                    my @w_before = @widths[0..$pos-2];
                     my $after = substr $input, $pos, length($input);
-                    # Get characters widths
-                    my $len = length($input);
-                    my @width = ();
-                    for(my $i = 0; $i < $len; $i++) {
-                        push(@width, $pos2cursor[$i+1] - $pos2cursor[$i]);
-                    }
-                    $pos--;
-                    splice @width, $pos, 1;
-                    # Remove last character
-                    setCursor($pos2cursor[length($input)-1]);
-                    print ERASE_UPTOEND;
-                    setCursor($pos2cursor[$pos]);
-                    @pos2cursor = @pos2cursor[0];
-                    for(my $i = 0; $i < @width; $i++) {
-                         push(@pos2cursor, $pos2cursor[$i] + $width[$i]);
-                    }
+                    my @w_after = @widths[$pos..@widths-1];
                     # Output characters
-                    print $after;
+                    @widths = ();
+                    push(@widths, @w_before);
+                    setCursorFromPos($column0, $pos-1, @widths);
+                    print $after.ERASE_UPTOEND;
+                    push(@widths, @w_after);
                     # Update input buffer
-                    $input = $before.$after;
-                    setCursor($pos2cursor[$pos]);
+                    $input = $before.$string.$after;
                     $tempHistory[$historyIdx] = $input;
+                    # re-place cursor
+                    $pos += -1;
                 }
+            }
+            # HOME
+            elsif ($fnct eq 'CUP') {
+                $pos = 0;
+            }
+            # END
+            elsif ($fnct eq 'CPL') {
+                $pos = length($input);
             }
             # CURSOR LEFT
             elsif ($fnct eq 'CUB') {
                 if ($pos > 0) {
-                    $pos--;
-                    setCursor($pos2cursor[$pos]);
+                    $pos += -1;
                 }
             }
             # CURSOR RIGHT
             elsif ($fnct eq 'CUF') {
                 if ($pos < length($input)) {
-                    $pos++;
-                    setCursor($pos2cursor[$pos]);
+                    $pos += 1;
                 }
             }
             # CURSOR UP
             elsif ($fnct eq 'CUU') {
                 if ($historyIdx > 0) {
+                    # get input from history
                     $historyIdx--;
                     $input = $tempHistory[$historyIdx];
-                    $pos = length($input);
-                    setCursor($pos2cursor[0]);
-                    @pos2cursor = @pos2cursor[0];
-                    @pos2cursor = printInputLine($input, @pos2cursor);
+                    # reset caret
+                    setCursor($column0);
+                    # Output characters
+                    @widths = printAnGetCharWidths($input);
                     print ERASE_UPTOEND;
+                    # re-place cursor
+                    $pos = length($input);
                 }
             }
             # CURSOR DOWN
             elsif ($fnct eq 'CUD') {
                 if ($historyIdx < (@tempHistory - 1)) {
+                    # get input from history
                     $historyIdx++;
                     $input = $tempHistory[$historyIdx];
-                    $pos = length($input);
-                    setCursor($pos2cursor[0]);
-                    @pos2cursor = @pos2cursor[0];
-                    @pos2cursor = printInputLine($input, @pos2cursor);
+                    # reset caret
+                    setCursor($column0);
+                    # Output characters
+                    @widths = printAnGetCharWidths($input);
                     print ERASE_UPTOEND;
+                    # re-place cursor
+                    $pos = length($input);
                 }
+            }
+            # NEW LINE
+            elsif ($fnct eq 'LF') {
+                #trim
+                $input =~ s/^\s+|\s+$//g;
+                $tempHistory[$historyIdx] = $input;
+                setCursor($column0);
+                print ERASE_UPTOEND;
+                print $input;
+                push(@$history, $input);
+                last;
             }
             # debug F2
             elsif ($fnct eq 'SSE') {
                 printf "\n";
                 print "historyIdx: $historyIdx (total: ".@tempHistory.")\n";
                 print "input size: ".length($input)."\n";
-                print "Columns: (total: ".@pos2cursor.")\n";
-                for(my $i = 0; $i < @pos2cursor; $i++) {
-                    if ($i == $pos) {
-                        print "> ".$pos2cursor[$i]."\n";
-                    } else {
-                        print "  ".$pos2cursor[$i]."\n";
-                    }
+                print "Widths: (total: ".@widths.")\n";
+                for(my $i = 0; $i < @widths; $i++) {
+                    if ($i == $pos) { print ">" } else { print " " }
+                    print " char[$i]: '".substr($input, $i, 1)."'";
+                    print " takes ".$widths[$i]." column(s)";
+                    print "\n";
+                }
+                if ($pos >= @widths) {
+                    print "Caret is on empty position ($pos)\n";
                 }
                 last;
             }
-            else { 
-                # Drop!
-                #print "[$fnct]" if (defined $fnct);
+
+            setCursorFromPos($column0, $pos, @widths);
+            if (defined $callback) {
+                last if (&$callback($string, $fnct, \@params, \$input));
             }
         }
 
@@ -1142,22 +1226,6 @@ sub promptLine {
     restore();
     return $input;
 }
-# Chinese: 汉字; traditional Chinese: 漢字, lit "Han characters").
-# 字汉字汉
-# eeee汉
-# é
-#test();
-#my $res;
-#$res = promptLine('Enter your name1 ');
-#print "$res\n";
-#$res = promptLine('Enter your name2 ','arthur');
-#print "$res\n";
-#$res = promptLine('Enter your name3 ','arthur','^[^0-9]+$');
-#print "$res\n";
-#my $res = promptLine('Enter your name4 ','arthur','^[^0-9]+$',('un','deux','trois'));
-#print "$res\n";
-#'Enter your name4 (arthur): ' = 27
-# origin = 28
 
 END { restore(); }
 1;
