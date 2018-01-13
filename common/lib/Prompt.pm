@@ -44,6 +44,7 @@ package Prompt;
 #         print "TAB pressed !";
 #         return 1;
 #     }
+#     return 0;
 # }
 # my @hist = ('123');
 # my $res = Prompt::promptLine('Name ','Albert','^[^0-9]+$',\@hist,\&callback);
@@ -52,6 +53,7 @@ package Prompt;
 # -----------------------------------------------------------------------------------
 # test case:
 # Chinese: 汉字; traditional Chinese: 漢字, lit "Han characters"
+# épé
 # -----------------------------------------------------------------------------------
 
 use strict;
@@ -336,8 +338,8 @@ sub cfmakeraw {
 
 # posix system read
 sub _read {
-    $_[1] = 100 if (!defined $_[1]);
-    $_[1] = 100 if ($_[1] <= 0);
+    $_[1] = 255 if (!defined $_[1]);
+    $_[1] = 255 if ($_[1] <= 0);
     STDOUT->printflush(); # sysread() block stdout, we need to flush it manually
     return sysread(STDIN, $_[0], $_[1]);
 }
@@ -345,7 +347,7 @@ sub _read {
 # flush stdin buffer
 # if specified wait a to couple of millisecond to let stdin buffer
 # filling itself before flushing it
-sub _flush {
+sub _flushX {
     my ($waitTimeMs, $debug) = @_;
     my $out = 0;
     my $flags = "";
@@ -364,6 +366,36 @@ sub _flush {
     fcntl(STDIN, F_SETFL, $flags & ~O_NONBLOCK);
     return $out;
 }
+
+# flush stdin buffer
+# if specified wait a to couple of millisecond to let stdin buffer
+# filling itself before flushing it
+sub _flush {
+    my ($waitTimeMs, $ref) = @_;
+    if (!defined $ref) {
+        my @list = ();
+        $ref = \@list;
+    }
+    my $flags;
+    fcntl(STDIN, F_GETFL, $flags);
+    fcntl(STDIN, F_SETFL, $flags | O_NONBLOCK);
+    while(1) {
+        my $buf;
+        usleep($waitTimeMs * 1000) if ($waitTimeMs);
+        my $nb = sysread(STDIN, $buf, 1000);
+        last if ($nb==0);
+        for(my $i = 0; $i < $nb; $i++) {
+            push(@$ref, ord(bytes::substr($buf, $i, 1)));
+        }
+    }
+    fcntl(STDIN, F_SETFL, $flags & ~O_NONBLOCK);
+    return +@$ref;
+}
+
+
+
+
+
 
 
 
@@ -845,14 +877,35 @@ sub setCursor {
 
 # get current Cursor position
 sub getGetCursor {
-    my $in = "";
-    printf(SR_POSITION);
-    my $nb = _read($in);
-    my $reg = chr(ESC)."\\".chr(CSI)."([0-9]*)\;([0-9]+)".chr(CPR);
-    my @matches = $in =~ m/$reg/;
+    my $in;
+    my @b;
+    print SR_POSITION;
+    STDOUT->printflush();
+    sysread(STDIN, $in, 1);
+    push(@b, ord(bytes::substr($in, 0, 1)));
+    _flush(0, \@b);
+    my $idx = 0;
+    my $P = "";
+    return undef if ($b[$idx++] != ESC);
+    return undef if ($b[$idx++] != CSI);
+    while (isCSI_P($b[$idx])) {
+        $P .= chr($b[$idx]); $idx++;
+    }
+    return undef if ($b[$idx++] != CPR);
+    my @matches = $P =~ m/([0-9]*)\;([0-9]+)/;
     return $matches[1] if (@matches);
+    return 0;
 }
 
+sub _append {
+    my ($r_inBytes, $r_inoutBytes, $r_inoutBuff) = @_;
+    for(my $i = 0; $i < @$r_inBytes; $i++) { 
+        my $byte = $$r_inBytes[$i];
+        push(@$r_inoutBytes, $byte);
+        $$r_inoutBuff .= chr($byte);
+    }
+    return +@$r_inoutBytes;
+}
 # read blocant avec decodage ECMA048
 # return ($string, $fnct, @params)
 #     $string: printable string if any (UTF8)
@@ -881,8 +934,11 @@ sub read_ECMA048_UTF8
     # large chunk detection (aka copy'n past)
     my $largeChunk = 1;
     while(1) {
+        my @tmp = ();
+        _flush(0,\@tmp);
+        $nb = _append(\@tmp, \@b ,\$in);
         # If we've flushed something, then it was a large Chunk (by definition)
-        last if (_flush());
+        last if (@tmp);
         # DEL should only have one byte
         last if (($b[0] == DEL) && ($nb>1));
         # C0 should only have one byte, except ESCaped sequence
@@ -895,7 +951,9 @@ sub read_ECMA048_UTF8
     };
     if ($largeChunk) {
         print "large Chunk detected!\n" if ($debug);
-        _flush(50); #, $debug);
+        my @tmp = ();
+        _flush(5,\@tmp);
+        $nb = _append(\@tmp, \@b ,\$in);
     }
     if ($nb == 0) {
         print "return null (empty)\n" if ($debug);
@@ -969,6 +1027,17 @@ sub read_ECMA048_UTF8
     print "return null (unknown control)\n" if ($debug);
     return (undef, undef, undef);
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1177,8 +1246,8 @@ sub promptLine {
                 push(@$history, $input);
                 last;
             }
-            # debug F2
-            elsif ($fnct eq 'SSE') {
+            # debug TAB
+            elsif (0 && $fnct eq 'HT') {
                 printf "\n";
                 print "historyIdx: $historyIdx (total: ".@tempHistory.")\n";
                 print "input size: ".length($input)."\n";
