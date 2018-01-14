@@ -14,11 +14,16 @@ exit 1
 main() {
 	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
 	checkTemplateExist
+	local wasLocked=0
+	isLocked && wasLocked=1
+	lockTemplate
 	unlockTemplate
 	# 1- get file list
 	find "$DEFINE_TEMPLATE_GITPATH" > "$DEFINE_TEMPLATE_PARSEFILE_SRC"
 	perl "$GITTEMPLATE_DIR/common/parseFile.pl" "$DEFINE_TEMPLATE_PARSEFILE_SRC"
 	# "$DEFINE_TEMPLATE_PARSEFILE_DST"
+	# restore lock state
+	[ $wasLocked == 1 ] && lockTemplate
 }
 
 main "$@"

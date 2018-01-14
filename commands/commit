@@ -8,8 +8,13 @@ usage() {
 main() {
 	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
 	checkTemplateExist
+	local wasLocked=0
+	isLocked && wasLocked=1
+	# git commit
 	unlockTemplate
 	cd "$DEFINE_TEMPLATE_GITPATH"
 	git commit "$@"
+	# restore lock state
+	[ $wasLocked == 1 ] && lockTemplate
 }
 main "$@"

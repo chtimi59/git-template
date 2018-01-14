@@ -14,16 +14,13 @@ exit 1
 main() {
 	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
 	checkTemplateNotExist
-	# create .template/tree folder
 	git init $DEFINE_TEMPLATE_GITPATH >/dev/null 2>&1	
-	# add some files
 	cd $DEFINE_TEMPLATE_GITPATH
 	git config core.autocrlf true
 	touch $DEFINE_TEMPLATE_CONFIG
 	touch $DEFINE_TEMPLATE_README
 	git add . >/dev/null 2>&1
 	git commit -m "initial"  >/dev/null 2>&1
-	# create .template/config file
 	touch $DEFINE_TEMPLATE_INSTANCE_CONFIG >/dev/null 2>&1
 	lockTemplate
 	# -- Bonus --

@@ -39,7 +39,8 @@ lockTemplate() {
 	cd "$DEFINE_TEMPLATE_GITPATH"
 	local status=$(git status --porcelain)
 	if [ ! -z "$status" ]; then
-		#echo Couldn\'t lock template
+		echo
+		printf $RED"Couldn\'t lock template"$CLEAR"\n"
 		echo
 		git status
 		exit 1 

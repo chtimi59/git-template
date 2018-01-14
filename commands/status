@@ -8,10 +8,15 @@ usage() {
 main() {	
 	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
 	checkTemplateExist
+	local wasLocked=0
+	isLocked && wasLocked=1
+	# git status
 	unlockTemplate
 	cd "$DEFINE_TEMPLATE_GITPATH"
 	printf "Template "
 	git status "$@"
+	# restore lock state
+	[ $wasLocked == 1 ] && lockTemplate
 }
 
 main "$@"
