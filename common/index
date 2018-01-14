@@ -40,7 +40,7 @@ lockTemplate() {
 	local status=$(git status --porcelain)
 	if [ ! -z "$status" ]; then
 		echo
-		printf $RED"Couldn\'t lock template"$CLEAR"\n"
+		printf $RED"Couldn\'t lock template\n"$CLEAR
 		echo
 		git status
 		exit 1 
@@ -62,23 +62,23 @@ unlockTemplate() {
 	# checks git satus
 	git status>/dev/null 2>&1 
 	if [ $? != 0 ]; then
-		echo Couldn\'t unlock template
-		echo Invalid template
+		printf $RED"Couldn\'t unlock template\n"
+		printf "Invalid template\n"$CLEAR
 		_lock
 		exit 1
 	fi
 	# get SHA
 	SHA=$(perl "$GITTEMPLATE_DIR/common/config.pl" core.sha);
 	if [ -z "$SHA" ]; then 
-		echo Couldn\'t unlock template
-		echo Invalid SHA
+		printf $RED"Couldn\'t unlock template\n"
+		printf "Invalid SHA\n"$CLEAR
 		_lock
 		exit 1
 	fi
 	git checkout $SHA >/dev/null 2>&1
 	if [ $? != 0 ]; then
-		echo Couldn\'t unlock template
-		echo checkout $SHA failed
+		printf $RED"Couldn\'t unlock template\n"
+		printf "checkout $SHA failed\n"$CLEAR
 		_lock
 		exit 1
 	fi

@@ -32,6 +32,20 @@ if (! -e $instanceConfigFilename) {
     %instanceData = SectionFile::read($instanceConfigFilename);
 }
 
+# Temporay Config file
+my %temporayData;
+my $temporayConfigFilename = $ENV{'DEFINE_TEMPLATE_TMP_CONFIG'};
+if (! defined $temporayConfigFilename) {
+    print STDERR "DEFINE_TEMPLATE_TMP_CONFIG not set\n";
+    exit 1;
+}
+if (! -e $temporayConfigFilename) {
+    print STDERR "Config file '$temporayConfigFilename' not found\n";
+    exit 1;
+} else {
+    %temporayData = SectionFile::read($temporayConfigFilename);
+}
+
 # Template Config file
 my %templateData;
 my $templateConfigFilename = $ENV{'DEFINE_TEMPLATE_CONFIG'};
@@ -76,7 +90,7 @@ sub getMissingRemplacementListFromFile {
     }
     my @out;
     foreach my $key (sort keys %foundkeysSet) {
-        if (! exists $instanceData{$REPLACEMENT_SECTION}{$key}) {
+        if (! exists $temporayData{$REPLACEMENT_SECTION}{$key}) {
             push @out, $key;
         }
     }
@@ -94,12 +108,15 @@ foreach my $key (@new) {
     if (exists $templateData{"$VARS_SECTION"}{$key.$VARS_DEFAULT}) {
         $default = $templateData{"$VARS_SECTION"}{$key.$VARS_DEFAULT};
     }
+    if (exists $temporayData{"$REPLACEMENT_SECTION"}{$key}) {
+        $default = $temporayData{"$REPLACEMENT_SECTION"}{$key};
+    }
     my $test='.+';
     if (exists $templateData{"$VARS_SECTION"}{$key.$VARS_TEST}) {
         $test = $templateData{"$VARS_SECTION"}{$key.$VARS_TEST};
     }
     my $value = Prompt::promptLine($prompt,$default,$test);
 	print "$value\n";
-    $instanceData{$REPLACEMENT_SECTION}{$key} = $value;
+    $temporayData{$REPLACEMENT_SECTION}{$key} = $value;
 }
-#SectionFile::write($filename, %data);
+SectionFile::write($temporayConfigFilename, %temporayData);
