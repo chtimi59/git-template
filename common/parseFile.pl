@@ -8,7 +8,6 @@ use SectionFile;
 use Prompt;
 use Getopt::Long qw(GetOptions);
 Getopt::Long::Configure qw(gnu_getopt);
-use Data::Dumper qw(Dumper);
 
 my $MAGIC_REGEX = '\%\%([^\%]+)\%\%';
 my $TRIM_REGEX = '^\s+|\s+$';
@@ -32,18 +31,18 @@ if (! -e $instanceConfigFilename) {
     %instanceData = SectionFile::read($instanceConfigFilename);
 }
 
-# Temporay Config file
-my %temporayData;
-my $temporayConfigFilename = $ENV{'DEFINE_TEMPLATE_TMP_CONFIG'};
-if (! defined $temporayConfigFilename) {
+# Temporary Config file
+my %temporaryData;
+my $temporaryConfigFilename = $ENV{'DEFINE_TEMPLATE_TMP_CONFIG'};
+if (! defined $temporaryConfigFilename) {
     print STDERR "DEFINE_TEMPLATE_TMP_CONFIG not set\n";
     exit 1;
 }
-if (! -e $temporayConfigFilename) {
-    print STDERR "Config file '$temporayConfigFilename' not found\n";
+if (! -e $temporaryConfigFilename) {
+    print STDERR "Config file '$temporaryConfigFilename' not found\n";
     exit 1;
 } else {
-    %temporayData = SectionFile::read($temporayConfigFilename);
+    %temporaryData = SectionFile::read($temporaryConfigFilename);
 }
 
 # Template Config file
@@ -90,7 +89,7 @@ sub getMissingRemplacementListFromFile {
     }
     my @out;
     foreach my $key (sort keys %foundkeysSet) {
-        if (! exists $temporayData{$REPLACEMENT_SECTION}{$key}) {
+        if (! exists $temporaryData{$REPLACEMENT_SECTION}{$key}) {
             push @out, $key;
         }
     }
@@ -105,18 +104,22 @@ foreach my $key (@new) {
         $prompt = $templateData{"$VARS_SECTION"}{$key.$VARS_PROMPT};
     }
     my $default;
-    if (exists $templateData{"$VARS_SECTION"}{$key.$VARS_DEFAULT}) {
-        $default = $templateData{"$VARS_SECTION"}{$key.$VARS_DEFAULT};
-    }
-    if (exists $temporayData{"$REPLACEMENT_SECTION"}{$key}) {
-        $default = $temporayData{"$REPLACEMENT_SECTION"}{$key};
+    {
+        if (exists $templateData{"$VARS_SECTION"}{$key.$VARS_DEFAULT}) {
+            $default = $templateData{"$VARS_SECTION"}{$key.$VARS_DEFAULT};
+        }
+        if (exists $instanceData{"$REPLACEMENT_SECTION"}{$key}) {
+            $default = $instanceData{"$REPLACEMENT_SECTION"}{$key};
+        }
+        if (exists $temporaryData{"$REPLACEMENT_SECTION"}{$key}) {
+            $default = $temporaryData{"$REPLACEMENT_SECTION"}{$key};
+        }
     }
     my $test='.+';
     if (exists $templateData{"$VARS_SECTION"}{$key.$VARS_TEST}) {
         $test = $templateData{"$VARS_SECTION"}{$key.$VARS_TEST};
     }
     my $value = Prompt::promptLine($prompt,$default,$test);
-	print "$value\n";
-    $temporayData{$REPLACEMENT_SECTION}{$key} = $value;
+    $temporaryData{$REPLACEMENT_SECTION}{$key} = $value;
 }
-SectionFile::write($temporayConfigFilename, %temporayData);
+SectionFile::write($temporaryConfigFilename, %temporaryData);

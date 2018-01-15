@@ -36,6 +36,7 @@ lockTemplate() {
 		return
 	fi
 	# check git status
+	rm -rf "$DEFINE_TEMPLATE_TMP"
 	cd "$DEFINE_TEMPLATE_GITPATH"
 	local status=$(git status --porcelain)
 	if [ ! -z "$status" ]; then
@@ -59,6 +60,7 @@ unlockTemplate() {
 		return
 	fi
 	_unlock
+	rm -rf "$DEFINE_TEMPLATE_TMP"
 	# checks git satus
 	git status>/dev/null 2>&1 
 	if [ $? != 0 ]; then

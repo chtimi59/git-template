@@ -10,12 +10,16 @@ main() {
 	checkTemplateExist
 	local wasLocked=0
 	isLocked && wasLocked=1
-	# git status
+	#lockTemplate
 	unlockTemplate
 	cd "$DEFINE_TEMPLATE_GITPATH"
+	# --
+
 	printf "Template "
 	git status "$@"
+
 	# restore lock state
+	rm -rf "$DEFINE_TEMPLATE_TMP"
 	[ $wasLocked == 1 ] && lockTemplate
 }
 

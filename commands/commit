@@ -10,11 +10,15 @@ main() {
 	checkTemplateExist
 	local wasLocked=0
 	isLocked && wasLocked=1
-	# git commit
+	#lockTemplate
 	unlockTemplate
 	cd "$DEFINE_TEMPLATE_GITPATH"
+	# --
+
 	git commit "$@"
+
 	# restore lock state
+	rm -rf "$DEFINE_TEMPLATE_TMP"
 	[ $wasLocked == 1 ] && lockTemplate
 }
 main "$@"

@@ -18,16 +18,25 @@ main() {
 	isLocked && wasLocked=1
 	lockTemplate
 	unlockTemplate
+	cd "$DEFINE_TEMPLATE_GITPATH"
+	# --
+
 	# 0- Prepare a temporary config file
-	rm -rf "$DEFINE_TEMPLATE_TMP"
 	mkdir -p "$DEFINE_TEMPLATE_TMP"
 	touch "$DEFINE_TEMPLATE_TMP_CONFIG"
+	#perl "$GITTEMPLATE_DIR/common/copyTmp2Config.pl" \
+	#	 "$DEFINE_TEMPLATE_INSTANCE_CONFIG" "$DEFINE_TEMPLATE_TMP_CONFIG" \
+	#	 "replacement"
 	# 1- get file list
 	find "$DEFINE_TEMPLATE_GITPATH" > "$DEFINE_TEMPLATE_PARSEFILE_SRC"
 	perl "$GITTEMPLATE_DIR/common/parseFile.pl" "$DEFINE_TEMPLATE_PARSEFILE_SRC"
-	# "$DEFINE_TEMPLATE_PARSEFILE_DST"
+	# 2- ...
+	# copy replacement section in config file
+	perl "$GITTEMPLATE_DIR/common/copyTmp2Config.pl" \
+		 "$DEFINE_TEMPLATE_TMP_CONFIG" "$DEFINE_TEMPLATE_INSTANCE_CONFIG" \
+		 "replacement"
+
 	# restore lock state
-	
 	rm -rf "$DEFINE_TEMPLATE_TMP"
 	[ $wasLocked == 1 ] && lockTemplate
 }
