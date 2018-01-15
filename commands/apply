@@ -24,15 +24,13 @@ main() {
 	# 0- Prepare a temporary config file
 	mkdir -p "$DEFINE_TEMPLATE_TMP"
 	touch "$DEFINE_TEMPLATE_TMP_CONFIG"
-	#perl "$GITTEMPLATE_DIR/common/copyTmp2Config.pl" \
-	#	 "$DEFINE_TEMPLATE_INSTANCE_CONFIG" "$DEFINE_TEMPLATE_TMP_CONFIG" \
-	#	 "replacement"
 	# 1- get file list
 	find "$DEFINE_TEMPLATE_GITPATH" > "$DEFINE_TEMPLATE_PARSEFILE_SRC"
 	perl "$GITTEMPLATE_DIR/common/parseFile.pl" "$DEFINE_TEMPLATE_PARSEFILE_SRC"
-	# 2- ...
+	# 2- get *.template file
+
 	# copy replacement section in config file
-	perl "$GITTEMPLATE_DIR/common/copyTmp2Config.pl" \
+	perl "$GITTEMPLATE_DIR/common/configMerge.pl" \
 		 "$DEFINE_TEMPLATE_TMP_CONFIG" "$DEFINE_TEMPLATE_INSTANCE_CONFIG" \
 		 "replacement"
 
