@@ -21,18 +21,25 @@ main() {
 	cd "$DEFINE_TEMPLATE_GITPATH"
 	# --
 
-	# 0- Prepare a temporary config file
 	mkdir -p "$DEFINE_TEMPLATE_TMP"
 	touch "$DEFINE_TEMPLATE_TMP_CONFIG"
-	# 1- get file list
-	find "$DEFINE_TEMPLATE_GITPATH" > "$DEFINE_TEMPLATE_PARSEFILE_SRC"
-	perl "$GITTEMPLATE_DIR/common/parseFile.pl" "$DEFINE_TEMPLATE_PARSEFILE_SRC"
-	# 2- get *.template file
 
-	# copy replacement section in config file
+	# 1- get file list to and get remplacement
+	find "$DEFINE_TEMPLATE_CONTENT/" > "$DEFINE_TEMPLATE_TMP_FILELIST"
+	perl "$GITTEMPLATE_DIR/common/parseFile.pl" "$DEFINE_TEMPLATE_TMP_FILELIST"
+	perl "$GITTEMPLATE_DIR/common/parseFile.pl" -c "$DEFINE_TEMPLATE_TMP_FILELIST"
+
+	# 2- copy replacement section in config file
 	perl "$GITTEMPLATE_DIR/common/configMerge.pl" \
 		 "$DEFINE_TEMPLATE_TMP_CONFIG" "$DEFINE_TEMPLATE_INSTANCE_CONFIG" \
 		 "replacement"
+
+	# 3- create fir files
+	mkdir -p "$DEFINE_TEMPLATE_TMP_FIR";
+	perl "$GITTEMPLATE_DIR/common/copyFiles.pl" \
+		 "$DEFINE_TEMPLATE_TMP_FILELIST" \
+		 "$DEFINE_TEMPLATE_TMP_CONFIG" \
+		 "$DEFINE_TEMPLATE_TMP_FIR"
 
 	# restore lock state
 	rm -rf "$DEFINE_TEMPLATE_TMP"

@@ -17,18 +17,18 @@ GetOptions(
 ) or exit 1;
 
 # Config file
-my $filename = $ENV{'DEFINE_TEMPLATE_INSTANCE_CONFIG'};
-if (! defined $filename) {
+my $DEFINE_TEMPLATE_INSTANCE_CONFIG = $ENV{'DEFINE_TEMPLATE_INSTANCE_CONFIG'};
+if (! defined $DEFINE_TEMPLATE_INSTANCE_CONFIG) {
     print STDERR "DEFINE_TEMPLATE_INSTANCE_CONFIG not set\n";
     exit 1;
 }
-if (! -e $filename) {
-    print STDERR "Config file '$filename' not found\n";
+if (! -e $DEFINE_TEMPLATE_INSTANCE_CONFIG) {
+    print STDERR "Config file '$DEFINE_TEMPLATE_INSTANCE_CONFIG' not found\n";
     exit 1;
 }
 
 # Dump config hash table
-my %data = SectionFile::read($filename);
+my %data = SectionFile::read($DEFINE_TEMPLATE_INSTANCE_CONFIG);
 
 # User just ask for the list ?
 if ($optList) {
@@ -59,7 +59,7 @@ my $key = $r[1];
 
 if ($optUnset) {
     delete $data{$sectionName}{$key};
-    SectionFile::write($filename, %data);
+    SectionFile::write($DEFINE_TEMPLATE_INSTANCE_CONFIG, %data);
     exit 0;
 }
 
@@ -73,5 +73,5 @@ if (not defined $value) {
 } else {
     # Write Key then
     $data{$sectionName}{$key} = $value;
-    SectionFile::write($filename, %data);
+    SectionFile::write($DEFINE_TEMPLATE_INSTANCE_CONFIG, %data);
 }
