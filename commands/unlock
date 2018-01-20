@@ -16,6 +16,19 @@ main() {
 	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
 	checkTemplateExist
 	unlockTemplate
+	
+	local sha=$(cd $DEFINE_TEMPLATE_GITPATH && git symbolic-ref -q --short HEAD || git describe --tags --exact-match 2>/dev/null || git rev-parse HEAD)
+	local author=$(cd $DEFINE_TEMPLATE_GITPATH && git log -1 --format="%an, %ar")
+	local regex=$(echo $DEFINE_PWD | sed 's/[\\\/\#\.]/\\\0/g')
+	printf $YELLOW"Branch: "$CLEAR
+	echo $sha
+	printf $YELLOW"Author: "$CLEAR
+	echo $author
+	printf $YELLOW"Folder: "$CLEAR
+	echo $DEFINE_TEMPLATE_GITPATH | sed -e "s/$regex/./g"
+	printf $YELLOW"Content: "$CLEAR
+	echo $DEFINE_TEMPLATE_CONTENT | sed -e "s/$regex/./g"
+	exit 0
 }
 
 main "$@"

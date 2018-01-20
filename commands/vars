@@ -31,6 +31,7 @@ main() {
 	echo 
 	echo -- temporary 
 	echo DEFINE_TEMPLATE_TMP: \"$DEFINE_TEMPLATE_TMP\"
+	exit 0
 }
 
 main "$@"

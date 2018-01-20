@@ -5,7 +5,7 @@ checkTemplateExist() {
 	if [ ! -d "$DEFINE_TEMPLATE_ROOTPATH" ]; then
 		echo "No Template found"
 		echo ""
-		echo "to add one use: 'git template add' or 'git template init'"
+		echo "to add one, please use: 'git template clone <url>' or 'git template init'"
 		exit 1
 	fi
 }
@@ -15,7 +15,7 @@ checkTemplateNotExist() {
 	if [ -d "$DEFINE_TEMPLATE_ROOTPATH" ]; then
 		echo "Template ($DEFINE_TEMPLATE_ROOTPATH) already defined"
 		echo ""
-		echo "to remove it use: 'git template remove'"
+		echo "to remove it, use: 'git template remove'"
 		exit 1
 	fi
 }
@@ -133,4 +133,27 @@ yesNoPrompt() {
 	else
 		return 1
 	fi
+}
+
+porcelain() {
+	local gitcmd=$SUBCOMMAND
+	local re='-+h(elp)?(\ |$)'
+	if [[ "$@" =~ $re ]]; then
+		git $gitcmd -h 2>&1 | sed 's/usage\:\ git/usage\:\ git template/g' >&2
+		exit 1
+	fi
+
+	checkTemplateExist
+	local wasLocked=0
+	isLocked && wasLocked=1
+
+	unlockTemplate
+	cd "$DEFINE_TEMPLATE_GITPATH"
+	
+	git $gitcmd "$@"
+	local ret=$?
+
+	rm -rf "$DEFINE_TEMPLATE_TMP"
+	[ $wasLocked == 1 ] && lockTemplate
+	exit $ret
 }

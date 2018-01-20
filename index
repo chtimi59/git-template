@@ -81,10 +81,12 @@ usage() {
 cat << EOM >&2
 usage: git template <subcommand>
 
+Git Procelain subcommands supported:
+   remote, add, commit, status
+
 Available subcommands are:
 
    init     init empty template
-   add      add a template
    remove   remove template
 
    config   configure template instance
@@ -101,14 +103,26 @@ main() {
 		exit 1
 	fi
 
-	SUBCOMMAND="$1"; shift
-	if [ ! -e "$GITTEMPLATE_DIR/commands/$SUBCOMMAND" ]; then
-		usage
-		exit 1
-	fi
-
+	export SUBCOMMAND="$1"
+	shift
+	
 	. "$GITTEMPLATE_DIR/common/index"
-	. "$GITTEMPLATE_DIR/commands/$SUBCOMMAND" $@
+
+	[ "$SUBCOMMAND" == "add" ] && porcelain "$@"
+	[ "$SUBCOMMAND" == "branch" ] && porcelain "$@"
+	[ "$SUBCOMMAND" == "checkout" ] && porcelain "$@"
+	[ "$SUBCOMMAND" == "commit" ] && porcelain "$@"
+	[ "$SUBCOMMAND" == "fetch" ] && porcelain "$@"
+	[ "$SUBCOMMAND" == "push" ] && porcelain "$@"
+	[ "$SUBCOMMAND" == "remote" ] && porcelain "$@"
+	[ "$SUBCOMMAND" == "status" ] && porcelain "$@"
+	
+	[ -e "$GITTEMPLATE_DIR/commands/$SUBCOMMAND" ] && \
+		. "$GITTEMPLATE_DIR/commands/$SUBCOMMAND" $@
+
+	usage
+	exit 1
+
 }
 
 main "$@"

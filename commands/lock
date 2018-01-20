@@ -16,6 +16,7 @@ main() {
 	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
 	checkTemplateExist
 	lockTemplate
+	exit 0
 }
 
 main "$@"

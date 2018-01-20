@@ -44,6 +44,8 @@ main() {
 	# restore lock state
 	rm -rf "$DEFINE_TEMPLATE_TMP"
 	[ $wasLocked == 1 ] && lockTemplate
+
+	exit 0
 }
 
 main "$@"

@@ -36,6 +36,7 @@ main() {
 	local re='-+e(dit)?(\ |$)'; [[ "$@" =~ $re ]] && editor
 	checkTemplateExist
 	perl "$GITTEMPLATE_DIR/common/config.pl" "$@"
+	exit $?
 }
 
 main "$@"
