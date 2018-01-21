@@ -11,24 +11,56 @@ EOM
 exit 1
 }
 
+onError() {
+	echo $ERROR_COLOR"$1"$CLEAR_COLOR
+	rm -rf $DEFINE_TEMPLATE_ROOTPATH
+	exit 1
+}
+
 main() {
 	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
+	[[ "$#" -gt "0" ]] && echo $ERROR_COLOR"warning extra parameters ignored"$CLEAR_COLOR
 	checkTemplateNotExist
+	
 	git init $DEFINE_TEMPLATE_GITPATH >/dev/null 2>&1
-	[ $? != 0 ] && exit 1
+	[[ "$?" != 0 ]] && onError "git-init failed"
+	rm -rf "$DEFINE_TEMPLATE_GITPATH/.git/hooks"
+	cp -rf "$GITTEMPLATE_RESSOURCES/hooks" "$DEFINE_TEMPLATE_GITPATH/.git/hooks"
+	touch $DEFINE_TEMPLATE_INSTANCE_CONFIG >/dev/null 2>&1
+
 	cd $DEFINE_TEMPLATE_GITPATH
+
 	git config core.autocrlf true
 	touch $DEFINE_TEMPLATE_CONFIG
 	touch $DEFINE_TEMPLATE_README
 	git add . >/dev/null 2>&1
-	[ $? != 0 ] && exit 1
+	[[ "$?" != 0 ]] && onError "Couldn't initialize empty template (err:1)"
 	git commit -m "initial"  >/dev/null 2>&1
-	[ $? != 0 ] && exit 1
-	touch $DEFINE_TEMPLATE_INSTANCE_CONFIG >/dev/null 2>&1
-	lockTemplate
+	[[ "$?" != 0 ]] && onError "Couldn't initialize empty template (err:2)"
+	
+	local sha=$(git symbolic-ref -q --short HEAD || git describe --tags --exact-match 2>/dev/null || git rev-parse HEAD)
+	local author=$(cd $DEFINE_TEMPLATE_GITPATH && git log -1 --format="%an, %ar")
+	[[ -z "$sha" ]]  && onError "Couldn't initialize empty template (err:3)"
+	perl "$GITTEMPLATE_DIR/common/config.pl" core.sha $sha
+	[[ "$?" != 0 ]] && onError "Couldn't set '$sha'"
+	
+	echo "Initialized empty template in '$DEFINE_TEMPLATE_ROOTPATH'"
+	if [[ "$TEMPLATE_VERBOSE" -gt "0" ]]; then
+		printf $FIELD_TITLE_COLOR"Branch: "$CLEAR_COLOR
+		echo $sha
+		printf $FIELD_TITLE_COLOR"Last Author: "$CLEAR_COLOR
+		echo $author
+		echo "(use \"git template unlock\" to edit your template)"
+	fi
+
+	git checkout --orphan empty >/dev/null 2>&1	
+	git reset >/dev/null 2>&1
+	_lock
+
 	# -- Bonus --
 	# if project container is also in git then,
 	# do a basic git command, to check if it's a git repo
+	cd $DEFINE_PWD
 	git status>/dev/null 2>&1 
 	[ $? != 0 ] && exit 0
 	# add template files to commit

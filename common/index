@@ -3,9 +3,10 @@
 
 checkTemplateExist() {
 	if [ ! -d "$DEFINE_TEMPLATE_ROOTPATH" ]; then
-		echo "No Template found"
-		echo ""
-		echo "to add one, please use: 'git template clone <url>' or 'git template init'"
+		echo $ERROR_COLOR"No Template found"$CLEAR_COLOR
+		if [[ "$TEMPLATE_VERBOSE" -gt "0" ]]; then
+			echo "Operation aborted (use \"git template clone <repo>\" or \"git template init\")"
+		fi
 		exit 1
 	fi
 }
@@ -13,9 +14,10 @@ checkTemplateExist() {
 checkTemplateNotExist() {
 	# multiple template is not supported
 	if [ -d "$DEFINE_TEMPLATE_ROOTPATH" ]; then
-		echo "Template ($DEFINE_TEMPLATE_ROOTPATH) already defined"
-		echo ""
-		echo "to remove it, use: 'git template remove'"
+		echo $ERROR_COLOR"Template already defined"$CLEAR_COLOR
+		if [[ "$TEMPLATE_VERBOSE" -gt "0" ]]; then
+			echo "Operation aborted (use \"git template remove\")"
+		fi
 		exit 1
 	fi
 }
@@ -35,20 +37,30 @@ lockTemplate() {
 		#echo Template already lock
 		return
 	fi
+	
 	# check git status
 	rm -rf "$DEFINE_TEMPLATE_TMP"
 	cd "$DEFINE_TEMPLATE_GITPATH"
 	local status=$(git status --porcelain)
 	if [ ! -z "$status" ]; then
 		echo
-		printf $RED"Couldn\'t lock template\n"$CLEAR
+		printf $ERROR_COLOR"Couldn\'t lock template\n"$CLEAR_COLOR
 		echo
-		git status
+		git status \
+			| sed 's/git\ add/git\ template\ add/g' \
+			| sed 's/git\ reset/git\ template\ reset/g' >&2
+		echo
+		echo "see also \"git template commit\""
 		exit 1 
 	fi 
+	
 	# update current SHA (can be branch, tag, or raw SHA)
-	local sha=$(git symbolic-ref -q --short HEAD || git describe --tags --exact-match 2>/dev/null || git rev-parse HEAD)
-	perl "$GITTEMPLATE_DIR/common/config.pl" core.sha $sha
+	local br=$(git rev-parse --abbrev-ref HEAD)
+	if [[ ! $br =~ ^_ ]]; then
+		local sha=$(git symbolic-ref -q --short HEAD || git describe --tags --exact-match 2>/dev/null || git rev-parse HEAD)
+		perl "$GITTEMPLATE_DIR/common/config.pl" core.sha $sha
+	fi
+
 	git checkout --orphan empty >/dev/null 2>&1
 	git reset >/dev/null 2>&1
 	_lock
@@ -64,75 +76,27 @@ unlockTemplate() {
 	# checks git satus
 	git status>/dev/null 2>&1 
 	if [ $? != 0 ]; then
-		printf $RED"Couldn\'t unlock template\n"
-		printf "Invalid template\n"$CLEAR
+		printf $ERROR_COLOR"Couldn\'t unlock template\n"
+		printf "Invalid template\n"$CLEAR_COLOR
 		_lock
 		exit 1
 	fi
 	# get SHA
-	SHA=$(perl "$GITTEMPLATE_DIR/common/config.pl" core.sha);
-	if [ -z "$SHA" ]; then 
-		printf $RED"Couldn\'t unlock template\n"
-		printf "Invalid SHA\n"$CLEAR
+	local sha=$(perl "$GITTEMPLATE_DIR/common/config.pl" core.sha);
+	if [ -z "$sha" ]; then 
+		printf $ERROR_COLOR"Couldn\'t unlock template\n"
+		printf "Invalid SHA\n"$CLEAR_COLOR
 		_lock
 		exit 1
 	fi
-	git checkout $SHA >/dev/null 2>&1
+	git checkout $sha >/dev/null 2>&1
 	if [ $? != 0 ]; then
-		printf $RED"Couldn\'t unlock template\n"
-		printf "checkout $SHA failed\n"$CLEAR
+		printf $ERROR_COLOR"Couldn\'t unlock template\n"
+		printf "checkout $SHA failed\n"$CLEAR_COLOR
 		_lock
 		exit 1
 	fi
 	mkdir -p "$DEFINE_TEMPLATE_CONTENT"
-}
-
-delete() {
-	# remove template folder
-	git rm -rf "$DEFINE_TEMPLATE_ROOTPATH" >/dev/null 2>&1
-
-	# unfortunatly 'git rm -rf' is not enough
-	if true; then
-		# remove submodule in .git/config
-		git config -f .git/config --remove-section submodule.$DEFINE_TEMPLATE_GITPATH >/dev/null 2>&1
-		# remove submodule in .git/modules
-		rm -rf .git/modules/$DEFINE_TEMPLATE_ROOT >/dev/null 2>&1 
-		# remove submodule in .gitmodules
-		git config -f .gitmodules --remove-section submodule.$DEFINE_TEMPLATE_GITPATH >/dev/null 2>&1 
-		# if .gitmodules is empty delete it
-		[ ! -s .gitmodules ] && rm -f .gitmodules >/dev/null 2>&1 	
-	fi
-
-	# remove 
-	rm -r "$DEFINE_TEMPLATE_ROOTPATH" >/dev/null 2>&1 
-
-	# clean up cached files/folders if needed
-	git status --porcelain | sed -n 's/^.D \(\.template\/.*\)$/\1/p' | xargs -I {} git rm --cached {}
-	git status --porcelain | grep -q "^.D .gitmodules$" && git rm --cached .gitmodules
-}
-
-addTemplate() {
-	local branch=$1;
-	local repo=$2;
-	mkdir -p $DEFINE_TEMPLATE_ROOTPATH
-	git submodule add -b $branch $repo $DEFINE_TEMPLATE_GITPATH
-	if [ ! -e "$DEFINE_TEMPLATE_GITPATH" ]; then
-		echo "Error couldn't add '$repo'"
-		delete
-		exit 1
-	fi
-	mkdir -p $DEFINE_TEMPLATE_OBJECTPATH
-	touch $DEFINE_TEMPLATE_INSTANCE_CONFIG
-}
-
-yesNoPrompt() {
-	[[ -t 0 ]] && read -e -n 1 -p "(Y/n)" res
-	if [[ $res =~ ^(y|Y)$ ]]
-	then
-		return 0 # err=0 mean success
-	else
-		return 1
-	fi
 }
 
 porcelain() {
@@ -156,4 +120,15 @@ porcelain() {
 	rm -rf "$DEFINE_TEMPLATE_TMP"
 	[ $wasLocked == 1 ] && lockTemplate
 	exit $ret
+}
+
+
+yesNoPrompt() {
+	[[ -t 0 ]] && read -e -n 1 -p "(Y/n)" res
+	if [[ $res =~ ^(y|Y)$ ]]
+	then
+		return 0 # err=0 mean success
+	else
+		return 1
+	fi
 }

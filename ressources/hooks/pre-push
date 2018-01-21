@@ -1,0 +1,16 @@
+#!/bin/sh
+remote="$1"
+url="$2"
+while read local_ref local_sha remote_ref remote_sha
+do
+	if [[ $local_ref =~ ^refs\/heads\/_ ]]
+	then
+		echo "invalid local ref $local_ref ('_' character are forbidden)"
+		exit 1 
+	fi
+	if [[ $remote_ref =~ ^refs\/heads\/\: ]]
+	then
+		echo "invalid remote ref $remote_ref ('_'  character are forbidden)"
+		exit 1 
+	fi
+done

@@ -74,6 +74,8 @@ Darwin)
 esac
 
 export GITTEMPLATE_DIR=`dirname $GITTEMPLATE_SCRIPT_PATH`
+export GITTEMPLATE_RESSOURCES="$GITTEMPLATE_DIR/ressources"
+
 #posix to windows
 #readlink -f $p | sed -e 's/^\///' -e 's/\//\\/g' -e 's/^\([a-zA-Z]\)\([^:].*\)$/\1:\2/' -e 's/^./\u\0/'
 
@@ -108,6 +110,8 @@ main() {
 	
 	. "$GITTEMPLATE_DIR/common/index"
 
+	[ "$SUBCOMMAND" == "checkout" ] && porcelain "$@"
+	[ "$SUBCOMMAND" == "reset" ] && porcelain "$@"
 	[ "$SUBCOMMAND" == "add" ] && porcelain "$@"
 	[ "$SUBCOMMAND" == "branch" ] && porcelain "$@"
 	[ "$SUBCOMMAND" == "checkout" ] && porcelain "$@"

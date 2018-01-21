@@ -15,6 +15,12 @@ export DEFINE_TEMPLATE_TMP_CONFIG="$DEFINE_TEMPLATE_TMP/config"
 export DEFINE_TEMPLATE_TMP_FILELIST="$DEFINE_TEMPLATE_TMP/sources"
 export DEFINE_TEMPLATE_TMP_FIR="$DEFINE_TEMPLATE_TMP/fir"
 
+# 0:quiet
+# 1:Info/Hints
+[[ -z $TEMPLATE_VERBOSE ]] && TEMPLATE_VERBOSE=1
+export TEMPLATE_VERBOSE
+[[ -z $TEMPLATE_COLOR ]] && TEMPLATE_COLOR=1
+export TEMPLATE_COLOR
 
 _lock() {
 	cd "$DEFINE_TEMPLATE_GITPATH"
@@ -30,14 +36,20 @@ _unlock() {
 	mv -f "$DEFINE_TEMPLATE_LOCKNAME" ".git"
 }
 
-GRAY=$'\e[1;30m'
-RED=$'\e[1;31m'
-GREEN=$'\e[1;32m'
-YELLOW=$'\e[1;33m'
-BLUE=$'\e[1;34m'
-PINK=$'\e[1;35m'
-CYAN=$'\e[1;36m'
-WHITE=$'\e[1;37m'
-ERROR=$'\e[1;37m\e[41m'
-SUCCESS=$'\e[1;37m\e[42m'
-CLEAR=$'\e[0m'
+if [[ $TEMPLATE_COLOR == 1 ]]; then
+	CLEAR_COLOR=$'\e[0m'
+	ERROR_COLOR=$'\e[0;31m'
+	SUCCESS_COLOR=$'\e[1;32m'
+	FIELD_TITLE_COLOR=$'\e[1;33m'
+	CMD_COLOR=
+	#GRAY=$'\e[1;30m'
+	#RED=$'\e[1;31m'
+	#GREEN=$'\e[1;32m'
+	#YELLOW=$'\e[1;33m'
+	#BLUE=$'\e[1;34m'
+	#PINK=$'\e[1;35m'
+	#CYAN=$'\e[1;36m'
+	#WHITE=$'\e[1;37m'
+	#ERROR=$'\e[1;37m\e[41m'
+	#SUCCESS=$'\e[1;37m\e[42m'
+fi

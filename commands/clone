@@ -1,0 +1,71 @@
+#!/bin/sh
+
+usage() {
+cat << EOM >&2
+usage: git template clone <repo>
+
+clone an existing template repository into your project
+
+    -h, --help            help
+EOM
+exit 1
+}
+
+onError() {
+	echo $ERROR_COLOR"$1"$CLEAR_COLOR
+	rm -rf $DEFINE_TEMPLATE_ROOTPATH
+	exit 1
+}
+
+main() {
+	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
+	[[ "$#" -gt "1" ]] && echo $ERROR_COLOR"warning extra parameters ignored"$CLEAR_COLOR
+	[[ -z "$1" ]] && echo "repository missing" && usage
+	checkTemplateNotExist
+	
+	local repo=$1
+	git clone $repo "$DEFINE_TEMPLATE_GITPATH" >/dev/null 2>&1
+	[[ "$?" != 0 ]] && onError "git-clone '$repo' failed"
+	[[ ! -e "$DEFINE_TEMPLATE_GITPATH" ]] && onError "Invalid template repository (err:1)"
+	[[ ! -e "$DEFINE_TEMPLATE_CONFIG" ]] && onError "Invalid template repository (err:2)"
+	[[ ! -e "$DEFINE_TEMPLATE_CONTENT" ]] && onError "Invalid template repository (err:3)"
+	rm -rf "$DEFINE_TEMPLATE_GITPATH/.git/hooks"
+	cp -rf "$GITTEMPLATE_RESSOURCES/hooks" "$DEFINE_TEMPLATE_GITPATH/.git/hooks"
+	touch "$DEFINE_TEMPLATE_INSTANCE_CONFIG" >/dev/null 2>&1	
+	cd "$DEFINE_TEMPLATE_GITPATH"
+	
+	local sha=$(git symbolic-ref -q --short HEAD || git describe --tags --exact-match 2>/dev/null || git rev-parse HEAD)
+	[[ -z "$sha" ]]  && onError "Invalid template repository (err:4)"
+	local br=$(git rev-parse --abbrev-ref HEAD)
+	[[ -z "$br" ]]  && onError "Invalid template repository (err:5)"
+	[[ $br =~ ^_ ]]  && onError "Invalid template repository (err:6)"
+	perl "$GITTEMPLATE_DIR/common/config.pl" core.sha $sha
+	[[ "$?" != 0 ]] && onError "Couldn't set '$sha'"
+	
+	echo "Initialized template in $DEFINE_TEMPLATE_ROOTPATH"
+	if [[ "$TEMPLATE_VERBOSE" -gt "0" ]]; then
+		local sha=$(cd $DEFINE_TEMPLATE_GITPATH && git symbolic-ref -q --short HEAD || git describe --tags --exact-match 2>/dev/null || git rev-parse HEAD)
+		local author=$(cd $DEFINE_TEMPLATE_GITPATH && git log -1 --format="%an, %ar")
+		printf $FIELD_TITLE_COLOR"Branch: "$CLEAR_COLOR
+		echo $sha
+		printf $FIELD_TITLE_COLOR"Last Author: "$CLEAR_COLOR
+		echo $author
+		echo "(use \"git template apply\" to generate your project)"
+	fi
+
+	git checkout --orphan empty >/dev/null 2>&1
+	git reset >/dev/null 2>&1
+	_lock
+
+	# -- Bonus --
+	# if project container is also in git then,
+	# do a basic git command, to check if it's a git repo
+	cd $DEFINE_PWD
+	git status>/dev/null 2>&1 
+	[ $? != 0 ] && exit 0
+	# add template files to commit
+	git add $DEFINE_TEMPLATE_ROOTPATH >/dev/null 2>&1
+	exit 0
+}
+
+main "$@"

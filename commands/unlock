@@ -17,17 +17,17 @@ main() {
 	checkTemplateExist
 	unlockTemplate
 	
-	local sha=$(cd $DEFINE_TEMPLATE_GITPATH && git symbolic-ref -q --short HEAD || git describe --tags --exact-match 2>/dev/null || git rev-parse HEAD)
-	local author=$(cd $DEFINE_TEMPLATE_GITPATH && git log -1 --format="%an, %ar")
-	local regex=$(echo $DEFINE_PWD | sed 's/[\\\/\#\.]/\\\0/g')
-	printf $YELLOW"Branch: "$CLEAR
-	echo $sha
-	printf $YELLOW"Author: "$CLEAR
-	echo $author
-	printf $YELLOW"Folder: "$CLEAR
-	echo $DEFINE_TEMPLATE_GITPATH | sed -e "s/$regex/./g"
-	printf $YELLOW"Content: "$CLEAR
-	echo $DEFINE_TEMPLATE_CONTENT | sed -e "s/$regex/./g"
+	if [[ "$TEMPLATE_VERBOSE" -gt "0" ]]; then
+		local sha=$(cd $DEFINE_TEMPLATE_GITPATH && git symbolic-ref -q --short HEAD || git describe --tags --exact-match 2>/dev/null || git rev-parse HEAD)
+		local author=$(cd $DEFINE_TEMPLATE_GITPATH && git log -1 --format="%an, %ar")
+		local regex=$(echo $DEFINE_PWD | sed 's/[\\\/\#\.]/\\\0/g')
+		printf $FIELD_TITLE_COLOR"Branch: "$CLEAR_COLOR
+		echo $sha
+		printf $FIELD_TITLE_COLOR"Author: "$CLEAR_COLOR
+		echo $author
+		printf $FIELD_TITLE_COLOR"Unlocked folder: "$CLEAR_COLOR
+		echo "'"$DEFINE_TEMPLATE_CONTENT"'" | sed -e "s/$regex/./g"
+	fi
 	exit 0
 }
 

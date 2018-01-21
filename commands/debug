@@ -1,20 +1,15 @@
 #!/bin/sh
 
-usage() {
-cat << EOM >&2
-usage: git template vars
-
-show internals variables
-
-    -h, --help            help
-EOM
-exit 1
-}
-
-main() {
-	local re='-+h(elp)?(\ |$)'; [[ "$@" =~ $re ]] && usage
-	echo GITTEMPLATE_SCRIPT_PATH: \"$GITTEMPLATE_SCRIPT_PATH\"
+main() {	
+	if isLocked; then
+		echo $ERROR_COLOR"Template locked"$CLEAR_COLOR
+	else
+		echo $SUCCESS_COLOR"Template unlocked"$CLEAR_COLOR
+	fi
+	echo	
 	echo GITTEMPLATE_DIR: \"$GITTEMPLATE_DIR\"
+	echo GITTEMPLATE_SCRIPT_PATH: \"$GITTEMPLATE_SCRIPT_PATH\"
+	echo GITTEMPLATE_RESSOURCES: \"$GITTEMPLATE_RESSOURCES\"
 	echo 
 	echo DEFINE_PWD: \"$DEFINE_PWD\"
 	echo DEFINE_TEMPLATE_ROOTPATH: \"$DEFINE_TEMPLATE_ROOTPATH\"	
